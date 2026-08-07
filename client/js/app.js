@@ -1074,6 +1074,73 @@ document.addEventListener('DOMContentLoaded', () => {
         loadActiveNote();
     }
 
+    // --- Markdown Editor Toolbar Logic ---
+    const setupMarkdownToolbar = () => {
+        const textArea = document.getElementById('noteContentArea');
+        const toolbarBtns = document.querySelectorAll('.editor-toolbar .toolbar-btn');
+        const editorDropdown = document.querySelector('.editor-toolbar .custom-dropdown');
+        
+        if (!textArea) return;
+
+        const insertText = (prefix, suffix = '') => {
+            const start = textArea.selectionStart;
+            const end = textArea.selectionEnd;
+            const selectedText = textArea.value.substring(start, end);
+            const replacement = prefix + selectedText + suffix;
+            
+            textArea.value = textArea.value.substring(0, start) + replacement + textArea.value.substring(end);
+            
+            textArea.focus();
+            if (selectedText.length > 0) {
+                textArea.selectionStart = start + prefix.length;
+                textArea.selectionEnd = start + prefix.length + selectedText.length;
+            } else {
+                textArea.selectionStart = textArea.selectionEnd = start + prefix.length;
+            }
+            
+            textArea.dispatchEvent(new Event('input'));
+        };
+
+        toolbarBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const action = btn.getAttribute('data-action');
+                if (action === 'bold') insertText('**', '**');
+                else if (action === 'italic') insertText('*', '*');
+                else if (action === 'underline') insertText('<u>', '</u>');
+                else if (action === 'list-ul') insertText('- ');
+                else if (action === 'list-ol') insertText('1. ');
+                else if (action === 'code') insertText('```\n', '\n```');
+                else if (action === 'link') insertText('[', '](url)');
+            });
+        });
+
+        if (editorDropdown) {
+            const options = editorDropdown.querySelectorAll('.dropdown-options div');
+            options.forEach(opt => {
+                opt.addEventListener('click', (e) => {
+                    const val = opt.getAttribute('data-value');
+                    if (val === 'h1') insertText('# ');
+                    else if (val === 'h2') insertText('## ');
+                    
+                    // Reset dropdown UI back to normal text after injecting markdown
+                    setTimeout(() => {
+                        const selectedEl = editorDropdown.querySelector('.dropdown-selected');
+                        if (selectedEl) {
+                            selectedEl.innerHTML = 'Normal text <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>';
+                        }
+                        options.forEach(o => o.classList.remove('selected'));
+                        const normalOpt = editorDropdown.querySelector('[data-value="normal"]');
+                        if(normalOpt) normalOpt.classList.add('selected');
+                        editorDropdown.setAttribute('data-value', 'normal');
+                    }, 50);
+                });
+            });
+        }
+    };
+    setupMarkdownToolbar();
+
     // --- AI Study Assistant Logic ---
     const handleAITask = async (taskType, customPrompt = "") => {
         if (!noteContentArea) return;

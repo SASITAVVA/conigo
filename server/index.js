@@ -88,8 +88,10 @@ app.use('/api/analytics', analyticsRoutes);
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-app.listen(port, () => {
-  logger.info(`CogniPath Enterprise AI Learning Platform server running on port ${port} [${config.NODE_ENV}]`);
-});
+if (!process.env.VERCEL) {
+  app.listen(port, () => {
+    logger.info(`CogniPath Enterprise AI Learning Platform server running on port ${port} [${config.NODE_ENV}]`);
+  });
+}
 
 export default app;

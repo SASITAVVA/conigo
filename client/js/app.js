@@ -2501,15 +2501,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const mStreak = document.getElementById('fc-metric-streak');
         const mTime = document.getElementById('fc-metric-time');
 
-        if (mToday) mToday.innerText = `${allCards.filter(c => c.next_review_date && (c.next_review_date.includes('Today') || c.times_reviewed <= 3)).length || 18} Cards`;
+        if (mToday) mToday.innerText = `${allCards.filter(c => c.next_review_date && (c.next_review_date.includes('Today') || c.times_reviewed <= 3)).length} Cards`;
         if (mRem) mRem.innerText = `${Math.max(0, deck.length - window.currentCardIdx)} Cards`;
         if (mAcc) {
-            const totalAcc = allCards.reduce((acc, c) => acc + (c.success_rate || 88), 0);
-            mAcc.innerText = allCards.length ? `${(totalAcc / allCards.length).toFixed(1)}%` : '88.5%';
+            const totalAcc = allCards.reduce((acc, c) => acc + (c.success_rate || 0), 0);
+            mAcc.innerText = allCards.length ? `${(totalAcc / allCards.length).toFixed(1)}%` : '0%';
         }
-        if (mXp) mXp.innerText = `+${((window.appState && window.appState.state.gamification && window.appState.state.gamification.dailyXp) || 280)} XP`;
-        if (mStreak) mStreak.innerText = `${((window.appState && window.appState.state.gamification && window.appState.state.gamification.streak) || 5)} Days`;
-        if (mTime) mTime.innerText = `${Math.ceil(Math.max(1, deck.length - window.currentCardIdx) * 0.5)} mins`;
+        if (mXp) {
+            const dailyXp = (window.appState && window.appState.state.gamification && window.appState.state.gamification.dailyXp) || 0;
+            mXp.innerText = `+${dailyXp} XP`;
+        }
+        if (mStreak) {
+            const streak = (window.appState && window.appState.state.gamification && window.appState.state.gamification.streak) || 0;
+            mStreak.innerText = `${streak} Days`;
+        }
+        if (mTime) mTime.innerText = `${Math.ceil(Math.max(0, deck.length - window.currentCardIdx) * 0.5)} mins`;
 
         // 2. Render Category Sidebar with Mastery percentage & progress bars (including dynamic saved note topics!)
         const catContainer = document.getElementById('fc-categories-list');

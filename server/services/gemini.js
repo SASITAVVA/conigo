@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 // Initialize Groq client with API key from environment
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || 'missing_api_key_fallback' });
 
 export const getGeminiChatStream = async (messages) => {
     try {

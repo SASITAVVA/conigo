@@ -107,5 +107,36 @@ export const db = {
   
   saveRawLocalDb(data) {
     writeLocalDb(data);
+  },
+
+  autoSeedUser(userId) {
+    const rawDb = this.getRawLocalDb();
+    const hasProgress = (rawDb.progress || []).some(p => p.user_id === userId);
+    const hasSessions = (rawDb.study_sessions || []).some(s => s.user_id === userId);
+    
+    if (!hasProgress && !hasSessions && rawDb.courses && rawDb.courses.length > 0) {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const yesterdayStr = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+      const weekAgoStr = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
+      
+      rawDb.progress = rawDb.progress || [];
+      rawDb.study_sessions = rawDb.study_sessions || [];
+      rawDb.recent_activity = rawDb.recent_activity || [];
+      
+      rawDb.progress.push({ user_id: userId, topic_id: 't-1', status: 'completed' });
+      rawDb.progress.push({ user_id: userId, topic_id: 't-2', status: 'completed' });
+      rawDb.progress.push({ user_id: userId, topic_id: 't-3', status: 'completed' });
+      
+      rawDb.study_sessions.push({ user_id: userId, subject_id: 'sub-algo', subject: 'Algorithms & Data Structures', duration_seconds: 3600, session_date: yesterdayStr });
+      rawDb.study_sessions.push({ user_id: userId, subject_id: 'sub-sys', subject: 'System Design Basics', duration_seconds: 2400, session_date: todayStr });
+      rawDb.study_sessions.push({ user_id: userId, subject_id: 'sub-nn', subject: 'Neural Networks', duration_seconds: 5200, session_date: weekAgoStr });
+      
+      rawDb.recent_activity.push({ id: Math.random().toString(), user_id: userId, type: 'course', description: 'Enrolled in Computer Science Foundation', timestamp: yesterdayStr + 'T10:00:00Z' });
+      rawDb.recent_activity.push({ id: Math.random().toString(), user_id: userId, type: 'quiz', description: 'Scored 92% in Algorithms Quiz', timestamp: todayStr + 'T14:30:00Z' });
+      
+      this.saveRawLocalDb(rawDb);
+      return true;
+    }
+    return false;
   }
 };

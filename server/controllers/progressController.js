@@ -8,6 +8,7 @@ export const getProgressSummary = async (req, res) => {
     const isDemoUser = (userId === '11111111-1111-1111-1111-111111111111');
 
     try {
+        db.autoSeedUser(userId);
         const rawDb = db.getRawLocalDb();
         const subjects = rawDb.subjects || [];
         const allTopics = rawDb.topics || [];

@@ -4,6 +4,7 @@ export const getDashboardStats = async (req, res) => {
     const userId = req.query.userId || '11111111-1111-1111-1111-111111111111';
 
     try {
+        db.autoSeedUser(userId);
         const rawDb = db.getRawLocalDb();
         const subjects = rawDb.subjects || [];
         const topics = rawDb.topics || [];

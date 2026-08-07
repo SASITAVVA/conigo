@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <!-- CogniPath Enterprise SVG Icons Library -->
+  <symbol id="icon-bolt" viewBox="0 0 24 24">
+    <path fill="currentColor" d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+  </symbol>
+  <symbol id="icon-brain" viewBox="0 0 24 24">
+    <path fill="currentColor" d="M12 2a5 5 0 0 0-5 5v1a5 5 0 0 0-3 4.58A5 5 0 0 0 8 18h1v2a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-2h1a5 5 0 0 0 4-5.42A5 5 0 0 0 17 8V7a5 5 0 0 0-5-5z"/>
+  </symbol>
+  <symbol id="icon-chart" viewBox="0 0 24 24">
+    <path fill="currentColor" d="M3 13h2v7H3v-7zm4-6h2v13H7V7zm4-4h2v17h-2V3zm4 9h2v8h-2v-8zm4-4h2v12h-2V8z"/>
+  </symbol>
+</svg>

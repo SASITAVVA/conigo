@@ -74,7 +74,7 @@ function findRelevantChunks(rawDb, userId, queryText, queryEmbeddingArray) {
     });
 
     return scored
-        .filter(item => item.score >= 1.0)
+        .filter(item => item.score >= 3.0)
         .sort((a, b) => b.score - a.score)
         .slice(0, 5)
         .map(item => item.chunk);
@@ -169,15 +169,17 @@ export const handleChatMessage = async (req, res) => {
 === MANDATORY BEHAVIOR & ARCHITECTURE RULES ===
 1. CONTEXT AWARENESS: You are part of an ongoing conversation. Remember the user's previous questions and your previous answers. Do not repeat yourself unnecessarily. Ensure logical continuity.
 2. NO AUTOMATIC QUESTION GENERATION: Your SOLE purpose is to answer the question asked. DO NOT generate unsolicited quiz questions at the end of your answer.
-3. RAG (RETRIEVAL-AUGMENTED GENERATION) PRIORITY: You are provided with retrieved excerpts from the user's uploaded PDF documents below. You MUST base your answer directly on them and prioritize them over general training data. 
-4. ELIMINATE HALLUCINATIONS: If the provided excerpts do not contain the answer, you MUST explicitly inform the user that the uploaded documents do not cover the topic. You may then offer to answer using your general knowledge, but clearly separate it from document facts. Never fabricate information.
-5. MANDATORY SOURCE REFERENCE FOOTER: Whenever your answer utilizes information from the uploaded PDF documents, you MUST append a dedicated "**Source Reference**" block at the very end of your response formatted exactly as follows:
+3. HYBRID RAG (RETRIEVAL-AUGMENTED GENERATION): You are a hybrid tutor. 
+    - If the user asks a question ABOUT their uploaded documents, notes, or courses, you MUST base your answer on the retrieved excerpts below. 
+    - If the retrieved excerpts do not contain the answer, you MUST explicitly state that the uploaded documents do not cover the topic.
+    - If the user asks a GENERAL question (unrelated to the documents), completely ignore the retrieved excerpts and answer the question naturally using your general global knowledge. Do NOT apologize for the documents not containing the answer.
+4. MANDATORY SOURCE REFERENCE FOOTER: ONLY when your answer utilizes information from the retrieved PDF documents, you MUST append a dedicated "**Source Reference**" block at the very end of your response formatted exactly as follows:
 ---
 **Source Reference:**
 - **PDF File Name:** [Insert File Name(s)]
 - **Page Number(s):** [Insert Page Number(s)]
 
-6. STRICT ACCURACY: Ensure all responses are factual, relevant, and complete. 
+5. STRICT ACCURACY: Ensure all responses are factual, relevant, and complete. 
 
 ${getModeInstruction(mode)}
 

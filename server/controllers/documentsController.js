@@ -136,14 +136,28 @@ export const processDocument = async (req, res) => {
             }
 
             latestDb.notifications = latestDb.notifications || [];
-            latestDb.notifications.unshift({
-                id: "notif-" + crypto.randomUUID(),
-                user_id: userId,
-                title: 'PDF Processed & Embedded',
-                message: `Your document "${title}" (${generatedChunks.length} chunks indexed) is ready in your AI knowledge base.`,
-                read: false,
-                created_at: new Date().toISOString()
-            });
+            
+            if (generatedChunks.length === 0) {
+                latestDb.notifications.unshift({
+                    id: "notif-" + crypto.randomUUID(),
+                    user_id: userId,
+                    title: 'PDF Processing Failed',
+                    message: `We couldn't extract any readable text from "${title}". Please ensure it's not a scanned image without OCR.`,
+                    read: false,
+                    created_at: new Date().toISOString()
+                });
+                const targetPdf = latestDb.pdf_uploads?.find(d => d.id === documentId);
+                if (targetPdf) targetPdf.status = 'failed';
+            } else {
+                latestDb.notifications.unshift({
+                    id: "notif-" + crypto.randomUUID(),
+                    user_id: userId,
+                    title: 'PDF Processed Successfully',
+                    message: `Your document "${title}" is ready! You can now ask the AI questions about it.`,
+                    read: false,
+                    created_at: new Date().toISOString()
+                });
+            }
 
             db.saveRawLocalDb(latestDb);
             

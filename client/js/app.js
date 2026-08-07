@@ -496,9 +496,19 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // --- Chat Logic ---
+    let currentChatId = sessionStorage.getItem('currentChatId') || null;
     const chatInput = document.getElementById('chatInput');
     const sendChatBtn = document.getElementById('sendChatBtn');
     const chatHistory = document.getElementById('chatHistory');
+    
+    // Restore chat from session if exists
+    if (currentChatId) {
+        const savedChat = sessionStorage.getItem('savedChatHistory');
+        if (savedChat && chatHistory) {
+            chatHistory.innerHTML = savedChat;
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        }
+    }
 
     const appendMessage = (text, role) => {
         const msgDiv = document.createElement('div');
@@ -506,6 +516,7 @@ document.addEventListener('DOMContentLoaded', () => {
         msgDiv.innerText = text;
         chatHistory.appendChild(msgDiv);
         chatHistory.scrollTop = chatHistory.scrollHeight;
+        sessionStorage.setItem('savedChatHistory', chatHistory.innerHTML);
         return msgDiv;
     };
 
@@ -523,10 +534,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const assistantMsgDiv = appendMessage('', 'assistant');
 
         try {
+            const payload = { message: text, userId: currentUser.id };
+            if (currentChatId) payload.chatId = currentChatId;
+
             const response = await fetch(`${window.location.origin}/api/chat`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: text, userId: currentUser.id })
+                body: JSON.stringify(payload)
             });
 
             if (!response.ok) throw new Error("Chat request failed");
@@ -548,10 +562,18 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (dataStr) {
                             try {
                                 const dataObj = JSON.parse(dataStr);
-                                if (dataObj.done) break;
+                                if (dataObj.chatId && !currentChatId) {
+                                    currentChatId = dataObj.chatId;
+                                    sessionStorage.setItem('currentChatId', currentChatId);
+                                }
+                                if (dataObj.done) {
+                                    sessionStorage.setItem('savedChatHistory', chatHistory.innerHTML);
+                                    break;
+                                }
                                 if (dataObj.content) {
                                     fullContent += dataObj.content;
-                                    assistantMsgDiv.innerText = fullContent;
+                                    assistantMsgDiv.innerHTML = marked.parse(fullContent); // Added marked.parse for markdown rendering if available, fallback to innerText if not
+                                    if(typeof marked === 'undefined') assistantMsgDiv.innerText = fullContent;
                                     chatHistory.scrollTop = chatHistory.scrollHeight;
                                 }
                             } catch (e) {

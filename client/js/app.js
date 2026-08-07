@@ -185,6 +185,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const authError = document.getElementById('authError');
     const togglePwdBtn = document.getElementById('togglePwd');
     const pwdInput = document.getElementById('authPassword');
+    const btnGoogleLogin = document.getElementById('btn-google-login');
+    const btnGithubLogin = document.getElementById('btn-github-login');
 
     toggleAuthMode.addEventListener('click', (e) => {
         e.preventDefault();
@@ -211,6 +213,46 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         authError.classList.add('hidden');
     });
+
+    if (btnGoogleLogin) {
+        btnGoogleLogin.addEventListener('click', async (e) => {
+            e.preventDefault();
+            const originalText = btnGoogleLogin.innerHTML;
+            btnGoogleLogin.innerText = "Redirecting...";
+            try {
+                if (!window.supabase) throw new Error("Supabase client not initialized.");
+                const { data, error } = await window.supabase.auth.signInWithOAuth({
+                    provider: 'google',
+                    options: { redirectTo: window.location.origin }
+                });
+                if (error) throw error;
+            } catch (err) {
+                console.error("Google login error:", err);
+                if (typeof showToast === 'function') showToast("Google login failed.", 'error');
+                btnGoogleLogin.innerHTML = originalText;
+            }
+        });
+    }
+
+    if (btnGithubLogin) {
+        btnGithubLogin.addEventListener('click', async (e) => {
+            e.preventDefault();
+            const originalText = btnGithubLogin.innerHTML;
+            btnGithubLogin.innerText = "Redirecting...";
+            try {
+                if (!window.supabase) throw new Error("Supabase client not initialized.");
+                const { data, error } = await window.supabase.auth.signInWithOAuth({
+                    provider: 'github',
+                    options: { redirectTo: window.location.origin }
+                });
+                if (error) throw error;
+            } catch (err) {
+                console.error("GitHub login error:", err);
+                if (typeof showToast === 'function') showToast("GitHub login failed.", 'error');
+                btnGithubLogin.innerHTML = originalText;
+            }
+        });
+    }
 
     togglePwdBtn.addEventListener('click', () => {
         if (pwdInput.type === 'password') {

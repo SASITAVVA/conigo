@@ -7,42 +7,57 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || 'missing_api_key_fal
 
 export const getGeminiChatStream = async (messages) => {
     try {
-        let systemInstruction = "";
-        let promptText = "";
+        const startTime = Date.now();
         
-        messages.forEach(msg => {
-            if (msg.role === 'system') {
-                systemInstruction += msg.content + "\n";
-            } else if (msg.role === 'user') {
-                promptText += msg.content + "\n";
+        // 1. Process and format messages properly to maintain full conversation context
+        const formattedMessages = messages.map(msg => {
+            let content = msg.content || "";
+            // Truncate system prompt to ~8000 chars to prevent Groq free-tier token limits (6k TPM)
+            if (msg.role === 'system' && content.length > 8000) {
+                content = content.substring(0, 8000) + "\n\n[System prompt truncated due to API limits.]";
             }
+            return {
+                role: msg.role === 'assistant' ? 'assistant' : msg.role === 'system' ? 'system' : 'user',
+                content: content
+            };
         });
+
+        // 2. Logging payload size for debugging
+        const payloadLength = JSON.stringify(formattedMessages).length;
+        console.log(`[Groq API] Initializing Chat Stream... (Payload: ~${Math.round(payloadLength/4)} tokens | ${payloadLength} chars)`);
 
         const stream = await groq.chat.completions.create({
             model: "llama-3.1-8b-instant",
-            messages: [
-                { role: "system", content: systemInstruction },
-                { role: "user", content: promptText }
-            ],
-            temperature: 0.5,
+            messages: formattedMessages,
+            temperature: 0.3, // Lower temperature for more factual, educational responses
             stream: true,
         });
         
-        // Wrap the Groq stream to yield objects with a .text property
-        // so that the rest of the application (chat.js) doesn't need to change at all.
+        // 3. Robust Error Handling & Stream Adapter
         async function* adaptStream() {
-            for await (const chunk of stream) {
-                const content = chunk.choices[0]?.delta?.content || "";
-                if (content) {
-                    yield { text: content };
+            try {
+                for await (const chunk of stream) {
+                    const content = chunk.choices[0]?.delta?.content || "";
+                    if (content) {
+                        yield { text: content };
+                    }
                 }
+                const latency = Date.now() - startTime;
+                console.log(`[Groq API] Stream completed successfully in ${latency}ms.`);
+            } catch (streamErr) {
+                console.error("[Groq API] Error during stream generation:", streamErr.message);
+                yield { text: "\n\n*[System Error: The AI service encountered a network interruption or rate limit while generating this response. Please try asking again.]*" };
             }
         }
         
         return adaptStream();
     } catch (error) {
-        console.error("Groq Chat API Error:", error);
-        throw error;
+        console.error("[Groq API] Initialization Error:", error.message);
+        // Return a mock stream so the UI receives the error gracefully instead of crashing the backend
+        async function* errorStream() {
+            yield { text: "*[System Error: Unable to connect to the AI service. Please ensure API keys are configured and try again later.]*" };
+        }
+        return errorStream();
     }
 };
 

@@ -148,15 +148,15 @@ export const handleChatMessage = async (req, res) => {
               contextText = "=== RETRIEVED KNOWLEDGE FROM USER'S UPLOADED PDF DOCUMENTS ===\n" + 
                   matchedChunks.map((c, idx) => `[Excerpt ${idx + 1}] Document: "${c.document_title || 'Uploaded PDF'}" | Page: ${c.page_number || 1} | Section: "${c.section_heading || 'General Content'}"\nContent: ${c.content}`).join("\n\n---------------------------------\n\n");
           } else {
-              contextText = "[No matching content found in uploaded PDF documents. Seamlessly fall back to general AI knowledge without displaying errors or requiring a PDF upload.]";
+              contextText = "[NO RELEVANT PDF DOCUMENTS FOUND FOR THIS QUERY.]";
           }
         } catch (embErr) {
-          contextText = "[Offline knowledge lookup. Answer using comprehensive general engineering knowledge.]";
+          contextText = "[OFFLINE KNOWLEDGE LOOKUP: Document retrieval system is currently unavailable.]";
         }
 
         const priorMessages = (rawDb.messages || [])
             .filter(m => m.chat_id === activeChatId && m.question && m.answer)
-            .slice(-4);
+            .slice(-6); // Increased memory to 6 turns
         
         const conversationMemory = [];
         priorMessages.forEach(pm => {
@@ -164,22 +164,20 @@ export const handleChatMessage = async (req, res) => {
             conversationMemory.push({ role: "assistant", content: pm.answer });
         });
 
-        const systemPrompt = `You are CogniPath AI, an intelligent, production-ready AI Tutor and Technical Assistant whose primary knowledge source is the user's uploaded PDF documents.
+        const systemPrompt = `You are CogniPath AI, an intelligent, production-ready AI Tutor and Technical Assistant.
 
 === MANDATORY BEHAVIOR & ARCHITECTURE RULES ===
-1. NO AUTOMATIC QUESTION GENERATION: Your SOLE purpose is to answer any question asked by the user. DO NOT generate unsolicited quiz questions, homework tasks, or test questions at the end of your answer unless the user explicitly asks you to quiz or test them.
-2. PRIORITIZE UPLOADED PDF KNOWLEDGE: You are provided with retrieved excerpts from the user's uploaded PDF documents below. If the answer exists in these PDFs, you MUST base your answer directly on them and prioritize them over general training data. Never invent information that is not supported by the uploaded PDF when relevant content exists.
-3. MULTIPLE PDF SYNTHESIS: If the answer spans multiple sections or multiple uploaded PDFs, combine the related information into a single coherent, structured answer. Mention clearly which document(s) the information came from.
-4. MANDATORY SOURCE REFERENCE FOOTER: Whenever your answer utilizes information from the uploaded PDF documents, you MUST append a dedicated "**Source Reference**" block at the very end of your response formatted exactly as follows:
-
+1. CONTEXT AWARENESS: You are part of an ongoing conversation. Remember the user's previous questions and your previous answers. Do not repeat yourself unnecessarily. Ensure logical continuity.
+2. NO AUTOMATIC QUESTION GENERATION: Your SOLE purpose is to answer the question asked. DO NOT generate unsolicited quiz questions at the end of your answer.
+3. RAG (RETRIEVAL-AUGMENTED GENERATION) PRIORITY: You are provided with retrieved excerpts from the user's uploaded PDF documents below. You MUST base your answer directly on them and prioritize them over general training data. 
+4. ELIMINATE HALLUCINATIONS: If the provided excerpts do not contain the answer, you MUST explicitly inform the user that the uploaded documents do not cover the topic. You may then offer to answer using your general knowledge, but clearly separate it from document facts. Never fabricate information.
+5. MANDATORY SOURCE REFERENCE FOOTER: Whenever your answer utilizes information from the uploaded PDF documents, you MUST append a dedicated "**Source Reference**" block at the very end of your response formatted exactly as follows:
 ---
 **Source Reference:**
 - **PDF File Name:** [Insert File Name(s)]
 - **Page Number(s):** [Insert Page Number(s)]
-- **Relevant Section or Heading:** [Insert Section/Heading if available]
 
-5. SEAMLESS FALLBACK TO GENERAL KNOWLEDGE: If no PDFs have been uploaded by the user, or if the answer is NOT found within the provided document context, continue working normally and answer the question accurately using your general computer science and academic knowledge. DO NOT display error messages, complain about missing documents, or demand a PDF upload.
-6. SUPPORT ALL QUESTION TYPES & NATURAL LANGUAGE: Understand natural language even if wording differs from the PDF text. Fully support definitions, concepts, code explanations, mathematics, MCQs, algorithms, true/false, fill-in-the-blanks, interview preparation, and debugging.
+6. STRICT ACCURACY: Ensure all responses are factual, relevant, and complete. 
 
 ${getModeInstruction(mode)}
 
@@ -194,6 +192,19 @@ ${contextText}`;
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
+
+        // Detailed RAG & AI Pipeline Logging
+        console.log(`\n=== [AI PIPELINE AUDIT LOG] ===`);
+        console.log(`[Request] User ID: ${userId} | Chat ID: ${activeChatId}`);
+        console.log(`[Prompt] User Prompt: "${message}"`);
+        console.log(`[Context] Memory: ${conversationMemory.length / 2} prior turns loaded.`);
+        if (matchedChunks && matchedChunks.length > 0) {
+            console.log(`[RAG] Successfully retrieved ${matchedChunks.length} relevant document chunks from vector DB.`);
+            matchedChunks.forEach((c, i) => console.log(`  -> Chunk ${i+1}: "${c.document_title}" (Page ${c.page_number})`));
+        } else {
+            console.log(`[RAG] No relevant chunks found in vector DB. Using General Knowledge fallback.`);
+        }
+        console.log(`===============================\n`);
 
         let fullResponse = "";
 

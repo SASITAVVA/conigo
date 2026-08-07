@@ -1,12 +1,13 @@
 import crypto from 'crypto';
 import { supabase } from '../config/supabase.js';
 import { db } from '../services/db.js';
-import { pipeline } from '@xenova/transformers';
+
 
 let extractor;
 const getExtractor = async () => {
     if (!extractor) {
         try {
+            const { pipeline } = await import('@xenova/transformers');
             extractor = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
         } catch (e) {
             console.warn("Transformers offline/error, relying on native local semantic search:", e.message);

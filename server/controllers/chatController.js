@@ -4,12 +4,13 @@ import { db } from '../services/db.js';
 import { getGeminiChatStream } from '../services/gemini.js';
 import { EventSystem } from '../services/events.js';
 import { checkAndAwardBadges } from '../controllers/gamificationController.js';
-import { pipeline } from '@xenova/transformers';
+
 
 let extractor;
 const getExtractor = async () => {
     if (!extractor) {
         try {
+            const { pipeline } = await import('@xenova/transformers');
             extractor = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
         } catch (e) {
             console.warn("Transformers embedding model offline/unavailable, defaulting to keyword RAG search:", e.message);

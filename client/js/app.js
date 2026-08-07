@@ -1857,13 +1857,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     utContainer.innerHTML = state.progress.upcoming.slice(0, 6).map((item, idx) => `
                         <div class="topic-list-item">
                             <div class="flex items-center gap-1">
-                                <div class="icon-box pending"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/></svg></div>
+                                <div class="icon-box pending" style="width: 20px; height: 20px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/></svg></div>
                                 <div>
-                                    <div style="font-size: 0.9rem; font-weight: 600;">${item.title}</div>
+                                    <div style="font-size: 0.85rem; font-weight: 600; line-height: 1.2; margin-bottom: 2px;">${item.title}</div>
                                     <div style="font-size: 0.75rem; color: var(--text-secondary);">${item.subject || 'Core Curriculum'}</div>
                                 </div>
                             </div>
-                            <button class="hover-lift" onclick="if(typeof window.openTopicStudyGuide === 'function') window.openTopicStudyGuide('${item.title.replace(/'/g, "\\'")}', '${(item.subject || 'Core Curriculum').replace(/'/g, "\\'")}', '');" style="background: rgba(99,102,241,0.15); border: 1px solid rgba(99,102,241,0.3); color: #c4b5fd; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; cursor: pointer; font-weight: 600;">Study Next ⚡</button>
+                            <button class="hover-lift" onclick="if(typeof window.openTopicStudyGuide === 'function') window.openTopicStudyGuide('${item.title.replace(/'/g, "\\'")}', '${(item.subject || 'Core Curriculum').replace(/'/g, "\\'")}', '');" style="background: rgba(99,102,241,0.15); border: 1px solid rgba(99,102,241,0.3); color: #c4b5fd; padding: 4px 8px; border-radius: 4px; font-size: 0.7rem; cursor: pointer; font-weight: 600; white-space: nowrap; flex-shrink: 0; margin-left: 0.5rem;">Study ⚡</button>
                         </div>
                     `).join('');
                 }

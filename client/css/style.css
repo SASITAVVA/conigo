@@ -13,36 +13,36 @@
     --error: #EF4444;
     
     /* Gradient Background */
-    --bg-main: linear-gradient(135deg, #F8FAFC 0%, #EEF2FF 50%, #E0F2FE 100%);
+    --bg-main: #FAFAFA;
     --bg-surface: #FFFFFF;
-    --bg-surface-glass: rgba(255, 255, 255, 0.75);
+    --bg-surface-glass: rgba(255, 255, 255, 0.85);
     
-    --text-primary: #0F172A;
-    --text-secondary: #64748B;
-    --border-light: rgba(15, 23, 42, 0.06);
+    --text-primary: #111827;
+    --text-secondary: #6B7280;
+    --border-light: rgba(0, 0, 0, 0.08);
     
-    /* Premium Shadows & Layout */
-    --radius-sm: 8px;
-    --radius-md: 12px;
-    --radius-lg: 18px;
-    --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.03);
-    --shadow-soft: 0 12px 40px rgba(0, 0, 0, 0.05);
+    /* Premium Shadows & Layout (Sleek & Compact) */
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --shadow-soft: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
     --shadow-glow: 0 10px 30px rgba(99, 102, 241, 0.15);
 
     /* Transitions */
-    --transition-fast: 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-    --transition-smooth: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    --transition-fast: 0.15s ease-out;
+    --transition-smooth: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 [data-theme="dark"] {
-    --bg-main: linear-gradient(135deg, #020617 0%, #0F172A 50%, #1E1B4B 100%);
-    --bg-surface: rgba(15, 23, 42, 0.85);
-    --bg-surface-glass: rgba(15, 23, 42, 0.65);
-    --text-primary: #F8FAFC;
-    --text-secondary: #94A3B8;
+    --bg-main: #0A0A0A;
+    --bg-surface: #111111;
+    --bg-surface-glass: rgba(17, 17, 17, 0.7);
+    --text-primary: #EDEDED;
+    --text-secondary: #A1A1AA;
     --border-light: rgba(255, 255, 255, 0.08);
-    --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.3);
-    --shadow-soft: 0 12px 40px rgba(0, 0, 0, 0.4);
+    --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.4);
+    --shadow-soft: 0 12px 40px rgba(0, 0, 0, 0.5);
     --primary-light: rgba(99, 102, 241, 0.15);
 }
 
@@ -61,6 +61,7 @@
 /* --- Ultra-Sleek Custom Glassmorphic Scrollbars --- */
 html {
     color-scheme: dark;
+    font-size: 14px; /* Base font size reduced for a compact SaaS look */
 }
 
 *::-webkit-scrollbar {
@@ -99,7 +100,7 @@ body {
     background-attachment: fixed;
     color: var(--text-primary);
     overflow-x: hidden;
-    line-height: 1.6;
+    line-height: 1.5;
     position: relative;
 }
 
@@ -118,9 +119,9 @@ body {
 .blob {
     position: absolute;
     filter: blur(120px);
-    opacity: 0.4;
+    opacity: 0.05; /* Super subtle background glow instead of noisy blobs */
     border-radius: 50%;
-    animation: float 20s ease-in-out infinite alternate;
+    animation: float 30s ease-in-out infinite alternate;
 }
 
 .blob-purple {
@@ -336,7 +337,7 @@ h1, h2, h3, h4, h5, h6 {
     -webkit-backdrop-filter: blur(20px);
     border: 1px solid var(--border-light);
     border-radius: var(--radius-lg);
-    padding: 2.5rem;
+    padding: 1.5rem;
     box-shadow: var(--shadow-sm);
     transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
 }
@@ -353,15 +354,15 @@ h1, h2, h3, h4, h5, h6 {
 /* --- Inputs & Buttons --- */
 .input-group {
     position: relative;
-    margin-bottom: 1.25rem;
+    margin-bottom: 1rem;
     width: 100%;
 }
 
 input[type="text"], input[type="email"], input[type="password"], input[type="file"] {
     width: 100%;
-    padding: 1rem 1.25rem;
+    padding: 0.6rem 1rem;
     background: var(--bg-main);
-    border: 1.5px solid var(--border-light);
+    border: 1px solid var(--border-light);
     border-radius: var(--radius-md);
     color: var(--text-primary);
     outline: none;
@@ -372,14 +373,14 @@ input[type="text"], input[type="email"], input[type="password"], input[type="fil
 input:focus {
     border-color: var(--primary);
     background: var(--bg-surface);
-    box-shadow: 0 0 0 4px var(--primary-light);
+    box-shadow: 0 0 0 2px var(--primary-light);
 }
 
 .btn-primary {
     background: var(--primary);
     color: #fff;
     border: none;
-    padding: 1rem 1.75rem;
+    padding: 0.6rem 1.25rem;
     border-radius: var(--radius-md);
     font-weight: 500;
     cursor: pointer;
@@ -390,12 +391,12 @@ input:focus {
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
+    font-size: 0.95rem;
 }
 
 .btn-primary:hover {
-    transform: translateY(-2px);
     background: var(--primary-hover);
-    box-shadow: 0 8px 25px var(--primary-light);
+    box-shadow: 0 4px 12px var(--primary-light);
 }
 
 .btn-primary:active {

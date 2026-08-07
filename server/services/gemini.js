@@ -91,67 +91,8 @@ export const generateQuiz = async (contextText, difficulty = "Medium", mainTopic
         
         return JSON.parse(cleanedContent);
     } catch (error) {
-        console.error("Groq Quiz Error, switching to adaptive AI fallback generator:", error.message || error);
-        const topicName = mainTopic && mainTopic !== "Technical Discipline" ? mainTopic : (contextText.replace("Topic: ", "").replace("Source Text:\n", "").slice(0, 50).trim() || "Advanced Technical Concepts");
-        return {
-            questions: [
-                {
-                    question: `What is the primary structural benefit of utilizing ${topicName} within high-performance system architectures?`,
-                    options: [
-                        `It significantly optimizes modular execution and streamlines complex data workflow`,
-                        `It bypasses authentication barriers to reduce server memory overhead`,
-                        `It eliminates the requirement for data validation and schema definitions`,
-                        `It forces single-threaded execution to prevent resource caching`
-                    ],
-                    correct_answer: `It significantly optimizes modular execution and streamlines complex data workflow`,
-                    topic: topicName
-                },
-                {
-                    question: `When implementing best practices for ${topicName}, which design principle is most critical?`,
-                    options: [
-                        `Maintaining predictable invariants and strict separation of concerns`,
-                        `Mixing raw data layer queries directly inside UI rendering loops`,
-                        `Disabling continuous automated unit testing in production pipelines`,
-                        `Hardcoding dynamic API endpoint dependencies within static files`
-                    ],
-                    correct_answer: `Maintaining predictable invariants and strict separation of concerns`,
-                    topic: topicName
-                },
-                {
-                    question: `At a ${difficulty}-level complexity, what trade-off is frequently evaluated when optimizing ${topicName}?`,
-                    options: [
-                        `Balancing memory allocation footprint against high-speed time complexity`,
-                        `Exchanging readable modular abstractions for monolithic spaghetti code`,
-                        `Removing database indexing to decrease hard disk storage utilization`,
-                        `Disabling asynchronous concurrency to serialize all system events`
-                    ],
-                    correct_answer: `Balancing memory allocation footprint against high-speed time complexity`,
-                    topic: topicName
-                },
-                {
-                    question: `Why is thorough mastery of ${topicName} considered indispensable for senior technical engineering?`,
-                    options: [
-                        `It provides proven problem-solving heuristics for scalable architecture design`,
-                        `It allows developers to skip security code reviews and protocol validation`,
-                        `It automates frontend styling without requiring user feedback loops`,
-                        `It guarantees zero bugs in unverified distributed edge servers`
-                    ],
-                    correct_answer: `It provides proven problem-solving heuristics for scalable architecture design`,
-                    topic: topicName
-                },
-                {
-                    question: `Which methodology ensures robust performance testing when deploying components relying on ${topicName}?`,
-                    options: [
-                        `Rigorous edge-case stress testing and automated regression benchmarks`,
-                        `Manual ad-hoc testing on local developer workstations without logs`,
-                        `Disabling application monitoring telemetry during peak traffic bursts`,
-                        `Relying purely on user bug reports after pushing changes live`
-                    ],
-                    correct_answer: `Rigorous edge-case stress testing and automated regression benchmarks`,
-                    topic: topicName
-                }
-            ]
-        };
+        console.error("Groq Quiz Error:", error.message || error);
+        throw error;
     }
 }
 

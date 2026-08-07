@@ -358,6 +358,30 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (targetPage === 'flashcards' && typeof window.updateFlashcardsCenter === 'function') {
                         window.updateFlashcardsCenter();
                     }
+                    if (targetPage === 'quiz') {
+                        const pendingTopic = sessionStorage.getItem('pendingQuizTopic');
+                        if (pendingTopic) {
+                            const quizTopicInp = document.getElementById('quizTopic');
+                            if (quizTopicInp) {
+                                quizTopicInp.value = pendingTopic;
+                                quizTopicInp.style.transition = 'all 0.3s ease';
+                                quizTopicInp.style.borderColor = 'var(--success)';
+                                quizTopicInp.style.boxShadow = '0 0 18px rgba(16, 185, 129, 0.45)';
+                                setTimeout(() => {
+                                    quizTopicInp.style.borderColor = 'var(--border-light)';
+                                    quizTopicInp.style.boxShadow = 'none';
+                                }, 2500);
+                            }
+                            sessionStorage.removeItem('pendingQuizTopic');
+                            setTimeout(() => {
+                                const btnGenerate = document.getElementById('generateQuizBtn');
+                                if (btnGenerate) {
+                                    btnGenerate.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                    btnGenerate.focus();
+                                }
+                            }, 300);
+                        }
+                    }
                 } else {
                     sec.classList.add('hidden');
                 }
@@ -771,10 +795,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 })
             });
 
-            if (!response.ok) throw new Error("Failed to generate quiz");
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.error || errData.details || "Failed to generate quiz. AI Service may be unavailable.");
+            }
 
             const data = await response.json();
-            if (!data.questions || data.questions.length === 0) throw new Error("No questions returned.");
+            if (!data.questions || data.questions.length === 0) throw new Error("No questions returned from AI. Try a different topic.");
 
             quizData = data.questions;
             startQuiz();
@@ -782,7 +809,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (err) {
             console.error(err);
-            quizStatus.innerText = "Error generating quiz. Please try again.";
+            quizStatus.innerText = err.message || "Error generating quiz. Please try again.";
             quizStatus.style.color = "var(--warning)";
         } finally {
             generateQuizBtn.innerText = "Generate Quiz";
@@ -2305,6 +2332,10 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('btnCourseModalQuiz')?.addEventListener('click', () => {
             courseModal.classList.add('hidden');
             if (typeof showToast === 'function') showToast("Course subjects loaded into AI Quiz Generator!");
+            
+            const titleEl = document.getElementById('courseModalTitle');
+            if (titleEl) sessionStorage.setItem('pendingQuizTopic', titleEl.innerText);
+            
             const navQuiz = document.querySelector('.nav-links li[data-page="quiz"]');
             if (navQuiz) navQuiz.click();
         });
@@ -2460,28 +2491,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (btnQuiz) btnQuiz.onclick = () => {
             modal.classList.add('hidden');
             if (typeof showToast === 'function') showToast(`Loaded "${topicTitle}" into AI Quiz Generator!`);
+            
+            sessionStorage.setItem('pendingQuizTopic', `${topicTitle} - ${subjectTitle}`);
+            
             const navQuiz = document.querySelector('.nav-links li[data-page="quiz"]');
             if (navQuiz) navQuiz.click();
-
-            // Automatically fetch and fill the selected study topic into the Quiz Topic box
-            setTimeout(() => {
-                const quizTopicInp = document.getElementById('quizTopic');
-                if (quizTopicInp) {
-                    quizTopicInp.value = `${topicTitle} - ${subjectTitle}`;
-                    quizTopicInp.style.transition = 'all 0.3s ease';
-                    quizTopicInp.style.borderColor = 'var(--success)';
-                    quizTopicInp.style.boxShadow = '0 0 18px rgba(16, 185, 129, 0.45)';
-                    setTimeout(() => {
-                        quizTopicInp.style.borderColor = 'var(--border-light)';
-                        quizTopicInp.style.boxShadow = 'none';
-                    }, 2500);
-                }
-                const btnGenerate = document.getElementById('generateQuizBtn');
-                if (btnGenerate) {
-                    btnGenerate.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    btnGenerate.focus();
-                }
-            }, 200);
         };
 
         modal.classList.remove('hidden');

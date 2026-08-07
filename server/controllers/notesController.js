@@ -137,152 +137,45 @@ export const verifyAndSyncNote = async (req, res) => {
         ];
 
         rawDb.flashcards = rawDb.flashcards || [];
-        const cleanContent = noteContent && noteContent.trim().length > 10 ? noteContent.trim() : `Fundamental principles and key concepts of ${verifiedTopicTitle}.`;
         
-        const generatedCards = [
-            {
+        // Let's invoke the AI to generate real flashcards instantly!
+        let generatedCards = [];
+        try {
+            const aiResponseStr = await geminiProcessNoteTask(noteContent, 'flashcards');
+            const aiResult = JSON.parse(aiResponseStr);
+            if (aiResult && aiResult.flashcards && Array.isArray(aiResult.flashcards)) {
+                generatedCards = aiResult.flashcards.map(card => ({
+                    id: "card-ai-" + crypto.randomUUID().slice(0, 8),
+                    user_id: userId,
+                    category: verifiedTopicTitle,
+                    topic: verifiedSubjectTitle,
+                    question: card.question || "Unknown Question",
+                    answer: card.answer || "Unknown Answer",
+                    difficulty_rating: "normal",
+                    next_review_date: "Today",
+                    success_rate: 0,
+                    times_reviewed: 0,
+                    last_reviewed: "Just generated",
+                    from_notes: true
+                }));
+            }
+        } catch (aiErr) {
+            console.error("AI Flashcard Generation Failed during save:", aiErr);
+            // Fallback to a single placeholder card if the AI fails
+            const cleanContent = noteContent && noteContent.trim().length > 10 ? noteContent.trim() : `Fundamental principles and key concepts of ${verifiedTopicTitle}.`;
+            generatedCards = [{
                 id: "card-ai-" + crypto.randomUUID().slice(0, 8),
                 user_id: userId,
                 category: verifiedTopicTitle,
                 topic: verifiedSubjectTitle,
                 question: `What is the core definition and primary purpose of ${verifiedTopicTitle}?`,
                 answer: `From your saved study notes: ${cleanContent}`,
-                difficulty_rating: "normal",
-                next_review_date: "Today",
-                success_rate: 92,
-                times_reviewed: 1,
-                last_reviewed: "Just generated",
-                from_notes: true
-            },
-            {
-                id: "card-ai-" + crypto.randomUUID().slice(0, 8),
-                user_id: userId,
-                category: verifiedTopicTitle,
-                topic: verifiedSubjectTitle,
-                question: `What are the key architectural mechanics and underlying workflows of ${verifiedTopicTitle}?`,
-                answer: `It operates by establishing robust structural boundaries, defining strict data invariants, and executing state transitions systematically based on your study material.`,
-                difficulty_rating: "hard",
-                next_review_date: "Today",
-                success_rate: 85,
-                times_reviewed: 1,
-                last_reviewed: "Just generated",
-                from_notes: true
-            },
-            {
-                id: "card-ai-" + crypto.randomUUID().slice(0, 8),
-                user_id: userId,
-                category: verifiedTopicTitle,
-                topic: verifiedSubjectTitle,
-                question: `How does mastering ${verifiedTopicTitle} directly impact system reliability and efficiency in ${verifiedSubjectTitle}?`,
-                answer: `It simplifies debugging workflows, accelerates operational retrieval times, and significantly reduces overall structural complexity during implementation.`,
-                difficulty_rating: "easy",
-                next_review_date: "Today",
-                success_rate: 96,
-                times_reviewed: 1,
-                last_reviewed: "Just generated",
-                from_notes: true
-            },
-            {
-                id: "card-ai-" + crypto.randomUUID().slice(0, 8),
-                user_id: userId,
-                category: verifiedTopicTitle,
-                topic: verifiedSubjectTitle,
-                question: `What are the most common pitfalls and anti-patterns developers face when implementing ${verifiedTopicTitle}?`,
-                answer: `Frequent errors include improper state initialization, failure to account for edge-case boundaries, and violating the separation of concerns principle.`,
-                difficulty_rating: "hard",
-                next_review_date: "Today",
-                success_rate: 82,
-                times_reviewed: 1,
-                last_reviewed: "Just generated",
-                from_notes: true
-            },
-            {
-                id: "card-ai-" + crypto.randomUUID().slice(0, 8),
-                user_id: userId,
-                category: verifiedTopicTitle,
-                topic: verifiedSubjectTitle,
-                question: `Describe a concrete real-world use case where ${verifiedTopicTitle} is absolutely essential.`,
-                answer: `It is highly critical in high-concurrency enterprise applications where data integrity, low-latency execution, and predictable memory management are non-negotiable.`,
-                difficulty_rating: "normal",
-                next_review_date: "Today",
-                success_rate: 90,
-                times_reviewed: 1,
-                last_reviewed: "Just generated",
-                from_notes: true
-            },
-            {
-                id: "card-ai-" + crypto.randomUUID().slice(0, 8),
-                user_id: userId,
-                category: verifiedTopicTitle,
-                topic: verifiedSubjectTitle,
-                question: `What is the performance profile (e.g., Time and Space Complexity) associated with ${verifiedTopicTitle}?`,
-                answer: `Depending on implementation, it generally offers highly optimized amortized time complexity, provided that the underlying data layout avoids unnecessary linear scans.`,
-                difficulty_rating: "hard",
-                next_review_date: "Today",
-                success_rate: 88,
-                times_reviewed: 1,
-                last_reviewed: "Just generated",
-                from_notes: true
-            },
-            {
-                id: "card-ai-" + crypto.randomUUID().slice(0, 8),
-                user_id: userId,
-                category: verifiedTopicTitle,
-                topic: verifiedSubjectTitle,
-                question: `What are the golden rules and best practices for writing clean code using ${verifiedTopicTitle}?`,
-                answer: `Always prioritize readability, modularize complex logic into atomic functions, rigorously type-check your inputs, and write comprehensive unit tests.`,
-                difficulty_rating: "easy",
-                next_review_date: "Today",
-                success_rate: 95,
-                times_reviewed: 1,
-                last_reviewed: "Just generated",
-                from_notes: true
-            },
-            {
-                id: "card-ai-" + crypto.randomUUID().slice(0, 8),
-                user_id: userId,
-                category: verifiedTopicTitle,
-                topic: verifiedSubjectTitle,
-                question: `How should you handle edge cases and extreme boundary conditions in ${verifiedTopicTitle}?`,
-                answer: `Implement defensive programming: validate all edge-case inputs early, utilize graceful error handling strategies, and ensure system invariants are never broken.`,
-                difficulty_rating: "normal",
-                next_review_date: "Today",
-                success_rate: 91,
-                times_reviewed: 1,
-                last_reviewed: "Just generated",
-                from_notes: true
-            },
-            {
-                id: "card-ai-" + crypto.randomUUID().slice(0, 8),
-                user_id: userId,
-                category: verifiedTopicTitle,
-                topic: verifiedSubjectTitle,
-                question: `How does ${verifiedTopicTitle} compare to legacy or alternative methodologies in ${verifiedSubjectTitle}?`,
-                answer: `Unlike older brute-force approaches that suffer from exponential scaling costs, this concept provides a sustainable, modular, and horizontally scalable solution.`,
-                difficulty_rating: "hard",
-                next_review_date: "Today",
-                success_rate: 87,
-                times_reviewed: 1,
-                last_reviewed: "Just generated",
-                from_notes: true
-            },
-            {
-                id: "card-ai-" + crypto.randomUUID().slice(0, 8),
-                user_id: userId,
-                category: verifiedTopicTitle,
-                topic: verifiedSubjectTitle,
-                question: `What is a fast mental model or mnemonic to instantly recall ${verifiedTopicTitle} during an interview?`,
-                answer: `Deconstruct complexity into atomic operational states, verify invariants against edge cases, and utilize spaced repetition memory indexing for high-speed concept retrieval.`,
-                difficulty_rating: "good",
-                next_review_date: "Today",
-                success_rate: 94,
-                times_reviewed: 1,
-                last_reviewed: "Just generated",
-                from_notes: true
-            }
-        ];
+            }];
+        }
 
-        rawDb.flashcards.unshift(...generatedCards);
+        if (generatedCards.length > 0) {
+            rawDb.flashcards.unshift(...generatedCards);
+        }
         db.saveRawLocalDb(rawDb);
 
         await EventSystem.emit('TOPIC_COMPLETED', {

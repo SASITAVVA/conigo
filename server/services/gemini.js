@@ -55,7 +55,7 @@ export const getGeminiChatStream = async (messages) => {
         console.error("[Groq API] Initialization Error:", error.message);
         // Return a mock stream so the UI receives the error gracefully instead of crashing the backend
         async function* errorStream() {
-            yield { text: "*[System Error: Unable to connect to the AI service. Please ensure API keys are configured and try again later.]*" };
+            yield { text: `*[System Error: Unable to connect to the AI service. Reason: ${error.message}]*` };
         }
         return errorStream();
     }

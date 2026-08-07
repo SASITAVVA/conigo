@@ -111,10 +111,26 @@ export const db = {
 
   autoSeedUser(userId) {
     const rawDb = this.getRawLocalDb();
+    let isModified = false;
+
+    // Seed Courses if empty
+    if (!rawDb.courses || rawDb.courses.length === 0) {
+      const defaultCourses = [
+        { id: 'course-cs101', title: 'Computer Science Foundation', description: 'Master the fundamentals of algorithms, data structures, and computational thinking required for top-tier software engineering.', difficulty: 'Intermediate', icon: '💻', subjects: [{ id: 'sub-algo', title: 'Algorithms & Data Structures' }, { id: 'sub-sys', title: 'System Design Basics' }, { id: 'sub-net', title: 'Networking Fundamentals' }] },
+        { id: 'course-ai200', title: 'Artificial Intelligence & Machine Learning', description: 'Deep dive into neural networks, deep learning architectures, and modern LLM application development.', difficulty: 'Advanced', icon: '🤖', subjects: [{ id: 'sub-nn', title: 'Neural Networks' }, { id: 'sub-nlp', title: 'Natural Language Processing' }, { id: 'sub-mlops', title: 'MLOps & Deployment' }] },
+        { id: 'course-med300', title: 'Pre-Med Biology & Anatomy', description: 'Comprehensive overview of human anatomy, cellular biology, and organic chemistry for medical students.', difficulty: 'Advanced', icon: '🧬', subjects: [{ id: 'sub-cell', title: 'Cellular Biology' }, { id: 'sub-anat', title: 'Human Anatomy' }, { id: 'sub-chem', title: 'Organic Chemistry' }] },
+        { id: 'course-bus100', title: 'Business & Finance Analytics', description: 'Learn modern financial modeling, market analysis, and enterprise business strategies.', difficulty: 'Beginner', icon: '📈', subjects: [{ id: 'sub-fin', title: 'Financial Accounting' }, { id: 'sub-econ', title: 'Microeconomics' }, { id: 'sub-stats', title: 'Business Statistics' }] }
+      ];
+      rawDb.courses = defaultCourses.map(({ subjects, ...rest }) => rest);
+      rawDb.subjects = defaultCourses.flatMap(c => c.subjects.map(s => ({ ...s, course_id: c.id })));
+      isModified = true;
+    }
+
     const hasProgress = (rawDb.progress || []).some(p => p.user_id === userId);
     const hasSessions = (rawDb.study_sessions || []).some(s => s.user_id === userId);
     
-    if (!hasProgress && !hasSessions && rawDb.courses && rawDb.courses.length > 0) {
+    // Seed User Activity
+    if (!hasProgress && !hasSessions) {
       const todayStr = new Date().toISOString().split('T')[0];
       const yesterdayStr = new Date(Date.now() - 86400000).toISOString().split('T')[0];
       const weekAgoStr = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
@@ -134,6 +150,10 @@ export const db = {
       rawDb.recent_activity.push({ id: Math.random().toString(), user_id: userId, type: 'course', description: 'Enrolled in Computer Science Foundation', timestamp: yesterdayStr + 'T10:00:00Z' });
       rawDb.recent_activity.push({ id: Math.random().toString(), user_id: userId, type: 'quiz', description: 'Scored 92% in Algorithms Quiz', timestamp: todayStr + 'T14:30:00Z' });
       
+      isModified = true;
+    }
+
+    if (isModified) {
       this.saveRawLocalDb(rawDb);
       return true;
     }

@@ -128,9 +128,7 @@ export const getAnalyticsSummary = async (req, res) => {
             else if (daySeconds > 1800) intensity = 2;
             else if (daySeconds > 0 || dayActs.length > 0) intensity = 1;
 
-            if (isDemoUser && intensity === 0 && (idx % 2 === 0 || idx % 5 === 0) && idx < 20) {
-                intensity = Math.floor(Math.random() * 3) + 1;
-            }
+
 
             heatmap.push({ date: dStr, seconds: daySeconds, activitiesCount: dayActs.length, intensity });
         }

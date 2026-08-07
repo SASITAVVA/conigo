@@ -15,7 +15,11 @@ function readLocalDb() {
 }
 
 function writeLocalDb(data) {
-  fs.writeFileSync(LOCAL_DB_PATH, JSON.stringify(data, null, 2), 'utf-8');
+  try {
+    fs.writeFileSync(LOCAL_DB_PATH, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn("[Local DB Sync Warning] Could not write to local DB (expected in serverless environments). Continuing with Supabase.");
+  }
 }
 
 /**

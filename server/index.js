@@ -8,6 +8,14 @@ import { EventSystem } from './services/events.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+process.on('uncaughtException', (err) => {
+  logger.error('CRITICAL: Uncaught Exception:', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('CRITICAL: Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
 // API Route Imports
 import authRoutes from './routes/auth.js';
 import chatRoutes from './routes/chat.js';

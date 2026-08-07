@@ -5,7 +5,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export const dbConfig = {
-  localDbPath: path.join(__dirname, '../../database/local_db.json'),
+  localDbPath: process.env.VERCEL ? path.join('/tmp', 'local_db.json') : path.join(__dirname, '../../database/local_db.json'),
   backupIntervalMs: 300000, // 5 minutes default
   defaultCollections: [
     'profiles',

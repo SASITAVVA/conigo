@@ -267,11 +267,24 @@ class StateManager {
     }
 
     async login(email, password, rememberMe = true) {
-        const res = await fetch(`${window.location.origin}/api/auth/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password, rememberMe })
-        });
+        let res;
+        try {
+            res = await fetch(`${window.location.origin}/api/auth/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password, rememberMe })
+            });
+        } catch (err) {
+            throw new Error('Network error. Please check your connection and try again.');
+        }
+        
+        const contentType = res.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            const text = await res.text();
+            console.error("Login API returned non-JSON response:", text);
+            throw new Error('A server error occurred. Please try again later.');
+        }
+
         const data = await res.json();
         
         if (!res.ok) throw new Error(data.error || 'Login failed.');
@@ -282,11 +295,24 @@ class StateManager {
     }
 
     async register(name, email, password, learningGoal) {
-        const res = await fetch(`${window.location.origin}/api/auth/register`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, email, password, learningGoal })
-        });
+        let res;
+        try {
+            res = await fetch(`${window.location.origin}/api/auth/register`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, email, password, learningGoal })
+            });
+        } catch (err) {
+            throw new Error('Network error. Please check your connection and try again.');
+        }
+        
+        const contentType = res.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            const text = await res.text();
+            console.error("Register API returned non-JSON response:", text);
+            throw new Error('A server error occurred. Please try again later.');
+        }
+
         const data = await res.json();
         
         if (!res.ok) throw new Error(data.error || 'Registration failed.');

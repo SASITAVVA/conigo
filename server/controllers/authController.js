@@ -50,12 +50,12 @@ export const syncSession = async (req, res) => {
         
       if (insertError) {
         console.error("Profile creation error:", insertError);
-        return res.status(500).json({ error: 'Failed to synchronize user profile.' });
+        return res.status(500).json({ error: `Failed to synchronize user profile. Database error: ${insertError.message}` });
       }
       profile = newProfile;
     } else if (profileError) {
       console.error("Profile fetch error:", profileError);
-      return res.status(500).json({ error: 'Failed to retrieve user profile.' });
+      return res.status(500).json({ error: `Failed to retrieve user profile. Database error: ${profileError.message}` });
     } else {
       // Profile exists, update last_login_at
       const { data: updatedProfile, error: updateError } = await supabaseAdmin

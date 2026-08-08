@@ -10,12 +10,16 @@ if (!supabaseUrl || !supabaseServiceKey) {
   console.warn("⚠️ SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is missing. Backend Supabase operations will fail.");
 }
 
-export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false
+export const supabaseAdmin = createClient(
+  supabaseUrl || 'https://missing-env.supabase.co', 
+  supabaseServiceKey || 'missing_key_dummy_value_to_prevent_crash', 
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
   }
-});
+);
 
 /**
  * Reusable backend service to track user activity in Supabase

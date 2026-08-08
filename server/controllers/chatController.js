@@ -80,11 +80,15 @@ function findRelevantChunks(userChunks, userId, queryText, queryEmbeddingArray) 
         return { chunk, score };
     });
 
-    return scored
-        .filter(item => item.score >= 3.0)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 5)
-        .map(item => item.chunk);
+    const sorted = scored.sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        // fallback to newest chunks if scores are equal
+        return new Date(b.chunk.created_at || 0) - new Date(a.chunk.created_at || 0);
+    });
+
+    // Always return up to 5 chunks so the AI has context of what the user is studying,
+    // even if the exact keywords didn't match strongly.
+    return sorted.slice(0, 5).map(item => item.chunk);
 }
 
 function getModeInstruction(mode) {
@@ -150,13 +154,19 @@ export const handleChatMessage = async (req, res) => {
           
           const { data: userChunks = [] } = await supabaseAdmin.from('document_chunks').select('*')
             .or(`user_id.eq.${userId},user_id.is.null,user_id.eq.all,user_id.eq.11111111-1111-1111-1111-111111111111`);
+          
+          const uniqueUploadedDocs = [...new Set(userChunks.map(c => c.document_title))].filter(Boolean);
+          const availableDocsText = uniqueUploadedDocs.length > 0 
+            ? `\n[SYSTEM NOTE: The user has uploaded the following documents to their knowledge base: ${uniqueUploadedDocs.map(d => `"${d}"`).join(', ')}.]` 
+            : "";
+
           matchedChunks = findRelevantChunks(userChunks, userId, message, embeddingArray);
 
           if (matchedChunks && matchedChunks.length > 0) {
-              contextText = "=== RETRIEVED KNOWLEDGE FROM USER'S UPLOADED PDF DOCUMENTS ===\n" + 
+              contextText = availableDocsText + "\n\n=== RETRIEVED KNOWLEDGE FROM USER'S UPLOADED PDF DOCUMENTS ===\n" + 
                   matchedChunks.map((c, idx) => `[Excerpt ${idx + 1}] Document: "${c.document_title || 'Uploaded PDF'}" | Page: ${c.page_number || 1} | Section: "${c.section_heading || 'General Content'}"\nContent: ${c.content}`).join("\n\n---------------------------------\n\n");
           } else {
-              contextText = "[NO RELEVANT PDF DOCUMENTS FOUND FOR THIS QUERY.]";
+              contextText = availableDocsText + "\n\n[NO RELEVANT PDF DOCUMENTS FOUND FOR THIS QUERY.]";
           }
         } catch (embErr) {
           contextText = "[OFFLINE KNOWLEDGE LOOKUP: Document retrieval system is currently unavailable.]";
@@ -182,9 +192,9 @@ export const handleChatMessage = async (req, res) => {
 1. CONTEXT AWARENESS: You are part of an ongoing conversation. Remember the user's previous questions and your previous answers. Do not repeat yourself unnecessarily. Ensure logical continuity.
 2. NO AUTOMATIC QUESTION GENERATION: Your SOLE purpose is to answer the question asked. DO NOT generate unsolicited quiz questions at the end of your answer.
 3. HYBRID RAG (RETRIEVAL-AUGMENTED GENERATION): You are a hybrid tutor. 
-    - If the user asks a question ABOUT their uploaded documents, notes, or courses, you MUST base your answer on the retrieved excerpts below. 
-    - If the retrieved excerpts do not contain the answer, you MUST explicitly state that the uploaded documents do not cover the topic.
-    - If the user asks a GENERAL question (unrelated to the documents), completely ignore the retrieved excerpts and answer the question naturally using your general global knowledge. Do NOT apologize for the documents not containing the answer.
+    - If the user asks a question ABOUT their uploaded documents, notes, or courses (or mentions "pdf", "document", etc.), you MUST base your answer primarily on the retrieved excerpts below. 
+    - If the user asks about their document but the retrieved excerpts do not contain the answer, you MUST explicitly state that the uploaded documents do not cover the topic.
+    - If the user asks a GENERAL conversation question (e.g. "hi", "how are you", "explain algebra"), completely ignore the retrieved excerpts and answer naturally using your general knowledge. Do NOT mention the documents or apologize for them unless the user specifically asked about them.
 4. MANDATORY SOURCE REFERENCE FOOTER: ONLY when your answer utilizes information from the retrieved PDF documents, you MUST append a dedicated "**Source Reference**" block at the very end of your response formatted exactly as follows:
 ---
 **Source Reference:**

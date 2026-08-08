@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { supabase } from '../config/supabase.js';
+import { supabaseAdmin } from '../services/supabase.js';
 import { db } from '../services/db.js';
 
 
@@ -162,15 +162,26 @@ export const processDocument = async (req, res) => {
             db.saveRawLocalDb(latestDb);
             
             try {
-                await supabase.from('documents').insert(newDoc);
+                const { error: docErr } = await supabaseAdmin.from('documents').insert(newDoc);
+                if (docErr) console.error("Supabase Document Insert Error:", docErr);
+
                 for (const chk of generatedChunks) {
-                    await supabase.from('document_chunks').insert({
+                    const { error: chunkErr } = await supabaseAdmin.from('document_chunks').insert({
+                        id: chk.id,
                         document_id: documentId,
+                        user_id: userId,
+                        document_title: title,
+                        page_number: chk.page_number,
+                        section_heading: chk.section_heading,
                         content: chk.content,
-                        embedding: chk.embedding
+                        embedding: chk.embedding,
+                        created_at: chk.created_at
                     });
+                    if (chunkErr) console.error("Supabase Chunk Insert Error:", chunkErr);
                 }
-            } catch(sErr) {}
+            } catch(sErr) {
+                console.error("Supabase Try/Catch Error:", sErr);
+            }
 
         } catch (processError) {
             console.error("Chunking/Embedding Error:", processError);

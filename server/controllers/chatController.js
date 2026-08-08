@@ -152,8 +152,13 @@ export const handleChatMessage = async (req, res) => {
               } catch(e) {}
           }
           
-          const { data: userChunks = [] } = await supabaseAdmin.from('document_chunks').select('*')
-            .or(`user_id.eq.${userId},user_id.is.null,user_id.eq.all,user_id.eq.11111111-1111-1111-1111-111111111111`);
+          const { data, error } = await supabaseAdmin.from('document_chunks').select('*')
+            .or(`user_id.eq.${userId},user_id.is.null,user_id.eq.11111111-1111-1111-1111-111111111111`);
+          
+          if (error) {
+              console.error("[ChatController] Supabase chunk fetch error:", error);
+          }
+          const userChunks = data || [];
           
           const uniqueUploadedDocs = [...new Set(userChunks.map(c => c.document_title))].filter(Boolean);
           const availableDocsText = uniqueUploadedDocs.length > 0 
@@ -169,6 +174,7 @@ export const handleChatMessage = async (req, res) => {
               contextText = availableDocsText + "\n\n[NO RELEVANT PDF DOCUMENTS FOUND FOR THIS QUERY.]";
           }
         } catch (embErr) {
+          console.error("[ChatController] Document retrieval exception:", embErr);
           contextText = "[OFFLINE KNOWLEDGE LOOKUP: Document retrieval system is currently unavailable.]";
         }
 

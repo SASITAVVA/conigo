@@ -343,6 +343,23 @@ class StateManager {
         }
     }
 
+    async resendVerificationEmail(email) {
+        try {
+            const { error } = await window.supabase.auth.resend({
+                type: 'signup',
+                email: email,
+                options: {
+                    emailRedirectTo: window.location.origin
+                }
+            });
+            if (error) throw new Error(error.message);
+            return true;
+        } catch (err) {
+            console.error("Supabase resend email error:", err);
+            throw new Error(err.message || 'Failed to resend email.');
+        }
+    }
+
     async syncSessionWithBackend(session) {
         try {
             const res = await fetch(`${window.location.origin}/api/auth/sync-session`, {

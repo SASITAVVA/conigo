@@ -237,9 +237,6 @@ document.addEventListener('DOMContentLoaded', () => {
             toggleAuthMode.parentElement.firstChild.nodeValue = "Already have an account? ";
         }
         authError.classList.add('hidden');
-        
-        const resendContainer = document.getElementById('resendEmailContainer');
-        if (resendContainer) resendContainer.classList.add('hidden');
     });
 
     if (btnGoogleLogin) {
@@ -332,33 +329,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             authError.innerText = error.message;
             authError.classList.remove('hidden');
-            
-            if (error.message.includes("Registration successful") || error.message.includes("already registered")) {
-                const resendContainer = document.getElementById('resendEmailContainer');
-                if (resendContainer) {
-                    resendContainer.classList.remove('hidden');
-                    
-                    const resendBtn = document.getElementById('resendEmailBtn');
-                    resendBtn.onclick = async () => {
-                        try {
-                            const resendStatus = document.getElementById('resendStatus');
-                            resendBtn.innerText = "Sending...";
-                            resendBtn.disabled = true;
-                            
-                            await window.appState.resendVerificationEmail(email);
-                            
-                            resendStatus.innerText = "Verification email sent! Please check your inbox.";
-                            resendStatus.classList.remove('hidden');
-                            resendBtn.innerText = "Resend Verification Email";
-                            resendBtn.disabled = false;
-                        } catch(err) {
-                            resendBtn.innerText = "Resend Verification Email";
-                            resendBtn.disabled = false;
-                            showToast(err.message, 'error');
-                        }
-                    };
-                }
-            }
         } finally {
             authSubmitBtn.innerText = originalText;
         }

@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { supabaseAdmin, activityLogService } from '../services/supabase.js';
 import { getGeminiChatStream } from '../services/gemini.js';
+import { db } from '../services/db.js';
 
 const getUserId = async (req) => {
   if (req.user?.id) return req.user.id;
@@ -158,7 +159,13 @@ export const handleChatMessage = async (req, res) => {
           if (error) {
               console.error("[ChatController] Supabase chunk fetch error:", error);
           }
-          const userChunks = data || [];
+          const supabaseChunks = data || [];
+          
+          const localDb = db.getRawLocalDb();
+          const localChunks = (localDb.document_chunks || []).filter(c => c.user_id === userId || !c.user_id || c.user_id === '11111111-1111-1111-1111-111111111111');
+          
+          // Combine both sources to guarantee chunks are found even if Supabase is offline or missing constraints
+          const userChunks = [...supabaseChunks, ...localChunks];
           
           const uniqueUploadedDocs = [...new Set(userChunks.map(c => c.document_title))].filter(Boolean);
           const availableDocsText = uniqueUploadedDocs.length > 0 

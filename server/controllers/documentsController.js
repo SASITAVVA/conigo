@@ -112,14 +112,14 @@ export const processDocument = async (req, res) => {
             const generatedChunks = processPageChunks(inputPages, documentId, userId, title);
 
             for (const chunk of generatedChunks) {
-                let embeddingArray = [];
+                let embeddingArray = null;
                 if (extract) {
                     try {
                         const chunkEmbedding = await extract(chunk.content, { pooling: 'mean', normalize: true });
                         embeddingArray = Array.from(chunkEmbedding.data);
                     } catch(e) {}
                 }
-                chunk.embedding = embeddingArray;
+                chunk.embedding = (embeddingArray && embeddingArray.length > 0) ? embeddingArray : null;
             }
 
             const latestDb = db.getRawLocalDb();

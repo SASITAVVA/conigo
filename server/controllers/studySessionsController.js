@@ -1,143 +1,102 @@
-import crypto from 'crypto';
-import { db } from '../services/db.js';
-import { EventSystem } from '../services/events.js';
-import { checkAndAwardBadges } from '../controllers/gamificationController.js';
+import { supabaseAdmin, activityLogService } from '../services/supabase.js';
 
-export const recordHeartbeat = async (req, res) => {
+const getUserIdFromAuth = async (req) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) throw new Error('No authorization header');
+  const token = authHeader.replace('Bearer ', '');
+  const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+  if (error || !user) throw new Error('Unauthorized');
+  return user.id;
+};
+
+export const startSession = async (req, res) => {
   try {
-    const { userId = '11111111-1111-1111-1111-111111111111', subjectId, addedSeconds = 10, activeInteractions = 5 } = req.body;
-    const rawDb = db.getRawLocalDb();
-    const todayStr = new Date().toISOString().split('T')[0];
+    const userId = await getUserIdFromAuth(req);
+    const { subjectId, topicId } = req.body;
 
-    // Find or create today's study session
-    let session = (rawDb.study_sessions || []).find(s => s.user_id === userId && s.session_date === todayStr && s.subject_id === (subjectId || 'sub-dsa'));
-    
-    if (!session) {
-      session = {
-        id: "sess-" + crypto.randomUUID(),
+    const { data: session, error } = await supabaseAdmin
+      .from('study_sessions')
+      .insert([{
         user_id: userId,
-        subject_id: subjectId || 'sub-dsa',
-        session_date: todayStr,
-        duration_seconds: addedSeconds,
-        active_interactions: activeInteractions,
-        started_at: new Date().toISOString(),
-        ended_at: new Date().toISOString()
-      };
-      rawDb.study_sessions = rawDb.study_sessions || [];
-      rawDb.study_sessions.push(session);
-    } else {
-      session.duration_seconds = (session.duration_seconds || 0) + Number(addedSeconds);
-      session.active_interactions = (session.active_interactions || 0) + Number(activeInteractions);
-      session.ended_at = new Date().toISOString();
-    }
+        subject_id: subjectId,
+        topic_id: topicId,
+        started_at: new Date().toISOString()
+      }])
+      .select()
+      .single();
 
-    // Also increment subject total study time if available
-    if (subjectId) {
-      const subject = (rawDb.subjects || []).find(sub => sub.id === subjectId || sub.slug === subjectId);
-      if (subject) {
-        subject.study_time_seconds = (subject.study_time_seconds || 0) + Number(addedSeconds);
-      }
-    }
+    if (error) throw error;
 
-    db.saveRawLocalDb(rawDb);
-
-    // Re-calculate streak and trigger real-time broadcast
-    const totalTodaySeconds = (rawDb.study_sessions || [])
-      .filter(s => s.user_id === userId && s.session_date === todayStr)
-      .reduce((acc, s) => acc + (s.duration_seconds || 0), 0);
-
-    let xpGain = 0;
-    if (totalTodaySeconds % 300 < addedSeconds) {
-      xpGain = 10;
-    }
-
-    await EventSystem.emit('STUDY_TIME_UPDATED', {
+    await activityLogService({
       userId,
-      title: `Active Study Heartbeat (+${addedSeconds}s)`,
-      details: { totalTodaySeconds, addedSeconds, subjectId },
-      xpAward: xpGain
+      actionType: 'STUDY_SESSION_STARTED',
+      entityType: 'study_session',
+      entityId: session.id
     });
 
-    await checkAndAwardBadges(userId);
-
-    res.json({ success: true, totalTodaySeconds, session });
+    res.json({ success: true, session });
   } catch (err) {
-    console.error("Heartbeat Error:", err);
-    res.status(500).json({ error: 'Failed to record study heartbeat.' });
+    console.error("Start Session Error:", err);
+    res.status(err.message === 'Unauthorized' || err.message === 'No authorization header' ? 401 : 500)
+       .json({ error: err.message || 'Failed to start session' });
+  }
+};
+
+export const endSession = async (req, res) => {
+  try {
+    const userId = await getUserIdFromAuth(req);
+    const { sessionId, durationSeconds } = req.body;
+
+    const { data: session, error } = await supabaseAdmin
+      .from('study_sessions')
+      .update({
+        ended_at: new Date().toISOString(),
+        duration_seconds: durationSeconds
+      })
+      .eq('id', sessionId)
+      .eq('user_id', userId)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    await activityLogService({
+      userId,
+      actionType: 'STUDY_SESSION_COMPLETED',
+      entityType: 'study_session',
+      entityId: session.id
+    });
+
+    res.json({ success: true, session });
+  } catch (err) {
+    console.error("End Session Error:", err);
+    res.status(err.message === 'Unauthorized' || err.message === 'No authorization header' ? 401 : 500)
+       .json({ error: err.message || 'Failed to end session' });
   }
 };
 
 export const getSessionHistory = async (req, res) => {
   try {
-    const userId = req.query.userId || '11111111-1111-1111-1111-111111111111';
-    const rawDb = db.getRawLocalDb();
-    const sessions = (rawDb.study_sessions || []).filter(s => s.user_id === userId);
+    const userId = await getUserIdFromAuth(req);
+
+    const { data: sessions, error } = await supabaseAdmin
+      .from('study_sessions')
+      .select('*')
+      .eq('user_id', userId)
+      .order('started_at', { ascending: false });
+
+    if (error) throw error;
+
     res.json({ success: true, sessions });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch study session history.' });
-  }
-};
-
-export const recordActivity = async (req, res) => {
-  try {
-    const { 
-      userId, 
-      type, 
-      title, 
-      description, 
-      extraData, 
-      subjectId, 
-      subjectName, 
-      topicName, 
-      duration, 
-      status = 'Completed',
-      metadata 
-    } = req.body;
-
-    // Use authenticated user ID if available
-    const realUserId = req.user?.id || userId || '11111111-1111-1111-1111-111111111111';
-
-    // Build comprehensive metadata
-    const payloadMetadata = {
-        extraData, subjectId, subjectName, topicName, duration, status, ...metadata
-    };
-
-    // Standardize action type for Admin Panel queries
-    let actionType = type ? type.toUpperCase() : 'STUDY';
-    if (actionType === 'UPLOAD') actionType = 'UPLOAD_PDF';
-    if (actionType === 'TOPIC') actionType = 'START_TOPIC';
-
-    // 1. Insert directly into Supabase activity_logs
-    const { supabaseAdmin, activityLogService } = await import('../services/supabase.js');
-    await activityLogService(
-      realUserId, 
-      actionType, 
-      title || 'Learning Activity', 
-      description || 'Active study engagement', 
-      payloadMetadata
-    );
-
-    // Try to trigger Gamification/Badges (Local logic still runs temporarily until full migration)
-    try {
-      await checkAndAwardBadges(realUserId);
-    } catch(e) {}
-
-    // Emit event for real-time frontend updates
-    EventSystem.emit("ACTIVITY_RECORDED", {
-      userId: realUserId,
-      activity: { type, title, description },
-      subjectName: subjectName || 'General Study'
-    });
-
-    res.json({ success: true, activity: { type, title }, addedSeconds: duration || 120 });
-  } catch (err) {
-    console.error("Record Activity Error:", err);
-    res.status(500).json({ error: 'Failed to record activity in Supabase.' });
+    console.error("Session History Error:", err);
+    res.status(err.message === 'Unauthorized' || err.message === 'No authorization header' ? 401 : 500)
+       .json({ error: err.message || 'Failed to fetch study session history.' });
   }
 };
 
 export default {
-  recordHeartbeat,
-  getSessionHistory,
-  recordActivity
+  startSession,
+  endSession,
+  getSessionHistory
 };

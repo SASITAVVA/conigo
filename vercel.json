@@ -17,10 +17,6 @@
       "dest": "server/index.js"
     },
     {
-      "src": "/admin",
-      "dest": "client/admin/index.html"
-    },
-    {
       "src": "/(.*)",
       "dest": "client/$1"
     }

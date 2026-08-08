@@ -1,35 +1,65 @@
-import { db } from '../services/db.js';
+import { supabaseAdmin } from '../services/supabase.js';
 
 export const getDashboardStats = async (req, res) => {
-    const userId = req.query.userId || '11111111-1111-1111-1111-111111111111';
-
     try {
-        db.autoSeedUser(userId);
-        const rawDb = db.getRawLocalDb();
-        const subjects = rawDb.subjects || [];
-        const topics = rawDb.topics || [];
+        const authHeader = req.headers.authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return res.status(401).json({ error: 'Missing or invalid authorization header' });
+        }
 
-        const userProgress = (rawDb.progress || []).filter(p => p.user_id === userId && p.status === 'completed');
-        const userSessions = (rawDb.study_sessions || []).filter(s => s.user_id === userId);
-        const userActivities = (rawDb.recent_activity || []).filter(a => a.user_id === userId);
-        const userPdfs = (rawDb.pdf_uploads || []).filter(p => p.user_id === userId).length;
-        const userQuestions = (rawDb.messages || []).filter(m => m.user_id === userId && m.role === 'assistant').length || 
-                              userActivities.filter(a => a.type === 'chat').length;
+        const token = authHeader.split(' ')[1];
+        const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+
+        if (authError || !user) {
+            return res.status(401).json({ error: 'Unauthorized: Invalid token' });
+        }
+
+        const userId = user.id;
+
+        const [
+            { data: subjectsData },
+            { data: topicsData },
+            { data: progressData },
+            { data: sessionsData },
+            { data: activitiesData },
+            { data: resourcesData }
+        ] = await Promise.all([
+            supabaseAdmin.from('subjects').select('*'),
+            supabaseAdmin.from('topics').select('*'),
+            supabaseAdmin.from('learning_progress').select('*').eq('user_id', userId),
+            supabaseAdmin.from('study_sessions').select('*').eq('user_id', userId),
+            supabaseAdmin.from('activity_logs').select('*').eq('user_id', userId),
+            supabaseAdmin.from('resources').select('*').eq('user_id', userId)
+        ]);
+
+        const subjects = subjectsData || [];
+        const topics = topicsData || [];
+        const userProgress = (progressData || []).filter(p => p.status === 'completed');
+        const userSessions = sessionsData || [];
+        const userActivities = activitiesData || [];
+        const userResources = resourcesData || [];
+
+        const userPdfs = userResources.length;
+        const userQuestions = userActivities.filter(a => a.action_type === 'chat' || a.action_type === 'ask_question').length;
 
         const isEmpty = (userProgress.length === 0 && userSessions.length === 0 && userActivities.length === 0 && userPdfs === 0);
 
         let totalTopicsCount = subjects.reduce((acc, s) => acc + (s.total_topics || 20), 0);
-        if (totalTopicsCount === 0) totalTopicsCount = 120; // safe default for DB structure
+        if (totalTopicsCount === 0) totalTopicsCount = 120;
 
         let completedTopicsCount = userProgress.length;
-        const overallPercentage = Math.round((completedTopicsCount / totalTopicsCount) * 100);
+        const overallPercentage = Math.round((completedTopicsCount / totalTopicsCount) * 100) || 0;
 
         const subjectBreakdown = subjects.map(sub => {
             const completed = userProgress.filter(p => {
                 const top = topics.find(t => t.id === p.topic_id);
-                return top && top.subject_id === sub.id;
+                return (top && top.subject_id === sub.id) || p.subject_id === sub.id;
             }).length;
-            const studySecs = userSessions.filter(s => s.subject_id === sub.id || s.subject === sub.title).reduce((acc, s) => acc + (s.duration_seconds || 0), 0);
+            
+            const studySecs = userSessions.filter(s => {
+                const top = topics.find(t => t.id === s.topic_id);
+                return top && top.subject_id === sub.id;
+            }).reduce((acc, s) => acc + (s.duration_seconds || 0), 0);
             
             const total = sub.total_topics || 20;
             return {
@@ -51,11 +81,11 @@ export const getDashboardStats = async (req, res) => {
 
         const todayStr = new Date().toISOString().split('T')[0];
         const todaySeconds = userSessions
-            .filter(s => s.session_date === todayStr)
+            .filter(s => s.started_at && s.started_at.split('T')[0] === todayStr)
             .reduce((acc, s) => acc + (s.duration_seconds || 0), 0);
         const todayMinutes = Math.floor(todaySeconds / 60);
 
-        const uniqueDates = [...new Set(userSessions.map(s => s.session_date))].sort().reverse();
+        const uniqueDates = [...new Set(userSessions.map(s => s.started_at ? s.started_at.split('T')[0] : null).filter(Boolean))].sort().reverse();
         let currentStreak = 0;
         let checkDate = new Date();
         for (let i = 0; i < 30; i++) {
@@ -83,7 +113,7 @@ export const getDashboardStats = async (req, res) => {
             const d = new Date();
             d.setDate(endDate.getDate() - idx);
             const dStr = d.toISOString().split('T')[0];
-            const daySessions = userSessions.filter(s => s.session_date === dStr);
+            const daySessions = userSessions.filter(s => s.started_at && s.started_at.split('T')[0] === dStr);
             const daySeconds = daySessions.reduce((acc, s) => acc + (s.duration_seconds || 0), 0);
             
             let intensity = 0;
@@ -97,9 +127,16 @@ export const getDashboardStats = async (req, res) => {
 
         const activity = userActivities
             .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-            .slice(0, 10);
+            .slice(0, 10)
+            .map(a => ({
+                id: a.id,
+                type: a.action_type,
+                title: `Activity: ${a.action_type.replace('_', ' ')}`,
+                description: '',
+                created_at: a.created_at
+            }));
 
-        const unreadNotificationsCount = (rawDb.notifications || []).filter(n => n.user_id === userId && !n.read).length;
+        const unreadNotificationsCount = 0;
 
         res.json({
             success: true,

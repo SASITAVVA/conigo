@@ -24,7 +24,7 @@ export const supabaseAdmin = createClient(
 /**
  * Reusable backend service to track user activity in Supabase
  */
-export const activityLogService = async (userId, actionType, actionName, description, extraData = null) => {
+export const activityLogService = async ({ userId, actionType, entityType, entityId, metadata = {} }) => {
   try {
     const { error } = await supabaseAdmin
       .from('activity_logs')
@@ -32,9 +32,9 @@ export const activityLogService = async (userId, actionType, actionName, descrip
         {
           user_id: userId,
           action_type: actionType,
-          action_name: actionName,
-          description: description,
-          metadata: extraData ? { extraData } : {}
+          entity_type: entityType,
+          entity_id: entityId,
+          metadata: metadata
         }
       ]);
     if (error) {

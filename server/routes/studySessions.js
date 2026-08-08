@@ -3,8 +3,8 @@ import * as studySessionsController from '../controllers/studySessionsController
 
 const router = express.Router();
 
-router.post('/heartbeat', studySessionsController.recordHeartbeat);
+router.post('/start', studySessionsController.startSession);
+router.post('/end', studySessionsController.endSession);
 router.get('/history', studySessionsController.getSessionHistory);
-router.post('/record-activity', studySessionsController.recordActivity);
 
 export default router;

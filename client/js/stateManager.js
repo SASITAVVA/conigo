@@ -202,16 +202,15 @@ class StateManager {
         if (this.isFetching && !silent) return;
         this.isFetching = true;
         try {
-            await Promise.all([
+            if (this.state.userId) {
+                await Promise.all([
                 this.fetchDashboard(),
                 this.fetchProgress(),
                 this.fetchAnalytics(),
                 this.fetchGamification(),
                 this.fetchStudyMaterials(),
                 this.fetchCourses()
-            ]);
-            if (this.state.user && this.state.user.role === 'admin') {
-                await this.fetchAdmin();
+                ]);
             }
             this.notify();
         } catch (error) {
@@ -286,16 +285,6 @@ class StateManager {
             this.state.courses = await res.json();
         } catch (error) {
             console.error("fetchCourses err:", error);
-        }
-    }
-
-    async fetchAdmin() {
-        try {
-            const res = await this.authenticatedFetch(`${window.location.origin}/api/admin/summary?userId=${this.state.userId}`);
-            if (!res.ok) return;
-            this.state.admin = await res.json();
-        } catch (error) {
-            console.error("fetchAdmin err:", error);
         }
     }
 

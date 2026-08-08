@@ -23,10 +23,6 @@ document.addEventListener('DOMContentLoaded', () => {
             appContainer.classList.remove('hidden');
             const emailDisplay = document.getElementById('sidebarEmailDisplay') || document.getElementById('userNameDisplay');
             if (emailDisplay) emailDisplay.innerText = user.email || user.name;
-            if (user.role === 'admin') {
-                const adminNavItem = document.getElementById('nav-admin-item');
-                if (adminNavItem) adminNavItem.style.display = 'flex';
-            }
         } else {
             // Unauthenticated or stub user: force login screen
             authContainer.classList.remove('hidden');
@@ -321,10 +317,6 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const emailDisplay = document.getElementById('sidebarEmailDisplay') || document.getElementById('userNameDisplay');
             if (emailDisplay) emailDisplay.innerText = currentUser.email;
-            if (currentUser.role === 'admin') {
-                const adminNavItem = document.getElementById('nav-admin-item');
-                if (adminNavItem) adminNavItem.style.display = 'flex';
-            }
             
         } catch (error) {
             authError.innerText = error.message;
@@ -364,11 +356,24 @@ document.addEventListener('DOMContentLoaded', () => {
     navLinks.forEach(link => {
         link.addEventListener('click', (e) => {
             const targetPage = link.getAttribute('data-page');
-            
-            navLinks.forEach(n => n.classList.remove('active'));
+                    navLinks.forEach(n => n.classList.remove('active'));
             link.classList.add('active');
             
             if (pageTitle) {
+                const appState = window.appState ? window.appState.state : null;
+                if (appState && appState.studyMaterials) {
+                    const notesTotalEl = document.getElementById('notesTotalCount');
+                    if (notesTotalEl) notesTotalEl.innerText = (appState.studyMaterials.bookmarks || []).length + (appState.studyMaterials.flashcards || []).length;
+                    
+                    const notesWeeklyEl = document.getElementById('notesWeeklyCount');
+                    if (notesWeeklyEl) notesWeeklyEl.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="12 19 12 5 5 12 19 12" transform="rotate(90 12 12)"/></svg> ${(appState.studyMaterials.bookmarks || []).length} this week`;
+                }
+
+                if (appState && appState.progress) {
+                    const notesSubjEl = document.getElementById('notesSubjectCount');
+                    if (notesSubjEl) notesSubjEl.innerText = (appState.progress.subjects || []).length || 6;
+                }
+                
                 // Strip out the SVG text content when setting title
                 pageTitle.innerText = link.innerText.trim();
             }
@@ -380,10 +385,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     sec.style.animation = 'none';
                     sec.offsetHeight;
                     sec.style.animation = 'fadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards';
-                    if (targetPage === 'admin' && window.AdminViewInstance) {
-                        window.AdminViewInstance.init();
-                        window.AdminViewInstance.fetchAndRender();
-                    }
                     if (targetPage === 'flashcards' && typeof window.updateFlashcardsCenter === 'function') {
                         window.updateFlashcardsCenter();
                     }
@@ -2248,19 +2249,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 if (typeof window.renderStudyMaterialTab === 'function') {
                     window.renderStudyMaterialTab(window.fcCurrentTab || 'ai_notes');
-                }
-            }
-
-            // --- Enterprise Admin Governance Updates ---
-            if (state.admin && window.AdminViewInstance) {
-                window.AdminViewInstance.init();
-                if (state.admin.users && state.admin.users.length > 0) {
-                    window.AdminViewInstance.users = state.admin.users;
-                    window.AdminViewInstance.stats = state.admin.stats || {};
-                    window.AdminViewInstance.updateKpiCards(window.AdminViewInstance.stats);
-                    window.AdminViewInstance.renderUsersTable();
-                } else {
-                    window.AdminViewInstance.fetchAndRender();
                 }
             }
         });

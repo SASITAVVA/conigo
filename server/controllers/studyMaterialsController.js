@@ -1,24 +1,36 @@
 import crypto from 'crypto';
-import { db } from '../services/db.js';
+import { supabaseAdmin, activityLogService } from '../services/supabase.js';
 import { EventSystem } from '../services/events.js';
 
+const getUserId = async (req) => {
+  if (req.user?.id) return req.user.id;
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.split(' ')[1];
+    const { data: { user } } = await supabaseAdmin.auth.getUser(token);
+    if (user?.id) return user.id;
+  }
+  return req.body.userId || req.query.userId || '11111111-1111-1111-1111-111111111111';
+};
+
 export const getStudyMaterials = async (req, res) => {
-  const userId = req.query.userId || '11111111-1111-1111-1111-111111111111';
-  const rawDb = db.getRawLocalDb();
+  const userId = await getUserId(req);
 
-  const flashcards = (rawDb.flashcards || []).filter(f => f.user_id === userId || !f.user_id);
-  const bookmarks = (rawDb.bookmarks || []).filter(b => b.user_id === userId || !b.user_id);
-  const goals = (rawDb.goals || []).filter(g => g.user_id === userId || !g.user_id);
+  const { data: flashcards = [] } = await supabaseAdmin.from('flashcards').select('*').or(`user_id.eq.${userId},user_id.is.null`);
+  const { data: bookmarks = [] } = await supabaseAdmin.from('bookmarks').select('*').or(`user_id.eq.${userId},user_id.is.null`);
+  const { data: goals = [] } = await supabaseAdmin.from('goals').select('*').or(`user_id.eq.${userId},user_id.is.null`);
 
-  res.json({ success: true, flashcards, bookmarks, goals });
+  res.json({ success: true, flashcards: flashcards || [], bookmarks: bookmarks || [], goals: goals || [] });
 };
 
 export const reviewFlashcard = async (req, res) => {
-  const { cardId, userId = '11111111-1111-1111-1111-111111111111', rating = 'easy' } = req.body;
-  const rawDb = db.getRawLocalDb();
-  const card = (rawDb.flashcards || []).find(f => f.id === cardId);
+  const userId = await getUserId(req);
+  const { cardId, rating = 'easy' } = req.body;
+  
+  const { data: card } = await supabaseAdmin.from('flashcards').select('*').eq('id', cardId).single();
   
   let xpAward = 15;
+  let updatedCard = null;
   if (card) {
     card.difficulty_rating = rating;
     card.times_reviewed = (card.times_reviewed || 0) + 1;
@@ -44,27 +56,35 @@ export const reviewFlashcard = async (req, res) => {
     card.next_review_date = rating === 'forgot' ? 'Today (Revision)' : now.toISOString().split('T')[0];
     card.mastery_percentage = Math.min(100, Math.round(card.success_rate));
     
-    db.saveRawLocalDb(rawDb);
+    const { data: updated } = await supabaseAdmin.from('flashcards').update({
+      difficulty_rating: card.difficulty_rating,
+      times_reviewed: card.times_reviewed,
+      last_reviewed: card.last_reviewed,
+      success_rate: card.success_rate,
+      next_review_date: card.next_review_date,
+      mastery_percentage: card.mastery_percentage
+    }).eq('id', cardId).select().single();
+    updatedCard = updated || card;
+    
+    await activityLogService({ userId, actionType: 'FLASHCARD_REVIEW_COMPLETED', entityType: 'flashcard', entityId: cardId, metadata: { rating } });
   }
 
   await EventSystem.emit('FLASHCARD_REVIEWED', {
     userId,
-    title: `Reviewed Card (${rating.toUpperCase()}): "${card ? card.question.slice(0, 32) : 'Concept'}..."`,
+    title: `Reviewed Card (${rating.toUpperCase()}): "${updatedCard ? updatedCard.question.slice(0, 32) : 'Concept'}..."`,
     xpAward
   });
 
-  res.json({ success: true, card, xpAward });
+  res.json({ success: true, card: updatedCard, xpAward });
 };
 
 export const bulkSaveFlashcards = async (req, res) => {
   try {
-    const { flashcards, userId = '11111111-1111-1111-1111-111111111111' } = req.body;
+    const userId = await getUserId(req);
+    const { flashcards } = req.body;
     if (!flashcards || !Array.isArray(flashcards)) {
       return res.status(400).json({ success: false, error: 'Invalid flashcards data.' });
     }
-
-    const rawDb = db.getRawLocalDb();
-    rawDb.flashcards = rawDb.flashcards || [];
 
     const newCards = flashcards.map(card => ({
       id: "card-ai-" + crypto.randomUUID().slice(0, 8),
@@ -82,8 +102,8 @@ export const bulkSaveFlashcards = async (req, res) => {
       created_at: new Date().toISOString()
     }));
 
-    rawDb.flashcards.unshift(...newCards);
-    db.saveRawLocalDb(rawDb);
+    await supabaseAdmin.from('flashcards').insert(newCards);
+    await activityLogService({ userId, actionType: 'FLASHCARD_SET_CREATED', entityType: 'flashcard_set', entityId: newCards[0]?.id, metadata: { count: newCards.length } });
 
     await EventSystem.emit('FLASHCARD_REVIEWED', {
       userId,
@@ -99,14 +119,18 @@ export const bulkSaveFlashcards = async (req, res) => {
 };
 
 export const updateFlashcard = async (req, res) => {
+  const userId = await getUserId(req);
   const { cardId, is_favorite, bookmarked } = req.body;
-  const rawDb = db.getRawLocalDb();
-  const card = (rawDb.flashcards || []).find(f => f.id === cardId);
-  if (card) {
-    if (typeof is_favorite !== 'undefined') card.is_favorite = is_favorite;
-    if (typeof bookmarked !== 'undefined') card.bookmarked = bookmarked;
-    db.saveRawLocalDb(rawDb);
-  }
+  const updates = {};
+  if (typeof is_favorite !== 'undefined') updates.is_favorite = is_favorite;
+  if (typeof bookmarked !== 'undefined') updates.bookmarked = bookmarked;
+  
+  const { data: card } = await supabaseAdmin.from('flashcards')
+    .update(updates)
+    .eq('id', cardId)
+    .select()
+    .single();
+
   res.json({ success: true, card });
 };
 
@@ -134,7 +158,8 @@ export const generateAiAssistInsight = async (req, res) => {
 };
 
 export const addBookmark = async (req, res) => {
-  const { userId = '11111111-1111-1111-1111-111111111111', itemType = 'Topic', referenceId, title, snippet } = req.body;
+  const userId = await getUserId(req);
+  const { itemType = 'Topic', referenceId, title, snippet } = req.body;
   const newBm = {
     id: "bm-" + crypto.randomUUID().slice(0, 8),
     user_id: userId,
@@ -144,7 +169,9 @@ export const addBookmark = async (req, res) => {
     snippet: snippet || "Important architectural definition.",
     created_at: new Date().toISOString()
   };
-  await db.insert('bookmarks', newBm);
+  await supabaseAdmin.from('bookmarks').insert(newBm);
+  
+  await activityLogService({ userId, actionType: 'BOOKMARK_CREATED', entityType: 'bookmark', entityId: newBm.id, metadata: { title } });
 
   await EventSystem.emit('BOOKMARK_ADDED', {
     userId,
@@ -156,15 +183,13 @@ export const addBookmark = async (req, res) => {
 };
 
 export const deleteBookmark = async (req, res) => {
-  const rawDb = db.getRawLocalDb();
-  rawDb.bookmarks = (rawDb.bookmarks || []).filter(b => b.id !== req.params.id);
-  db.saveRawLocalDb(rawDb);
+  await supabaseAdmin.from('bookmarks').delete().eq('id', req.params.id);
   res.json({ success: true });
 };
 
 export const setGoal = async (req, res) => {
-  const { userId = '11111111-1111-1111-1111-111111111111', goalType = 'daily', targetMinutes = 60 } = req.body;
-  const rawDb = db.getRawLocalDb();
+  const userId = await getUserId(req);
+  const { goalType = 'daily', targetMinutes = 60 } = req.body;
   const newGoal = {
     id: "goal-" + crypto.randomUUID().slice(0, 8),
     user_id: userId,
@@ -176,9 +201,9 @@ export const setGoal = async (req, res) => {
     end_date: new Date(Date.now() + (goalType === 'daily' ? 86400000 : 86400000 * 7)).toISOString().split('T')[0],
     created_at: new Date().toISOString()
   };
-  rawDb.goals = rawDb.goals || [];
-  rawDb.goals.push(newGoal);
-  db.saveRawLocalDb(rawDb);
+  await supabaseAdmin.from('goals').insert(newGoal);
+  
+  await activityLogService({ userId, actionType: 'GOAL_CREATED', entityType: 'goal', entityId: newGoal.id, metadata: { goalType, targetMinutes } });
 
   await EventSystem.emit('GOAL_SET', { userId, title: `Set new ${goalType.toUpperCase()} goal: ${targetMinutes} mins`, xpAward: 10 });
   res.json({ success: true, goal: newGoal });

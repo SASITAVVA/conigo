@@ -1,21 +1,43 @@
-import { db } from '../services/db.js';
+import { supabaseAdmin } from '../services/supabase.js';
+
+const getUserIdFromAuth = async (req) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) throw new Error('No authorization header');
+  const token = authHeader.replace('Bearer ', '');
+  const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+  if (error || !user) throw new Error('Unauthorized');
+  return user.id;
+};
 
 export const getAnalyticsSummary = async (req, res) => {
-    const userId = req.query.userId || '11111111-1111-1111-1111-111111111111';
-
     try {
-        db.autoSeedUser(userId);
-        const rawDb = db.getRawLocalDb();
-        const subjects = rawDb.subjects || [];
-        const topics = rawDb.topics || [];
+        const userId = await getUserIdFromAuth(req);
 
-        const userSessions = (rawDb.study_sessions || []).filter(s => s.user_id === userId);
-        const userActivities = (rawDb.recent_activity || []).filter(a => a.user_id === userId);
-        const userPdfs = (rawDb.pdf_uploads || []).filter(p => p.user_id === userId);
-        const userProgress = (rawDb.progress || []).filter(p => p.user_id === userId && p.status === 'completed');
+        // Fetch data from supabase
+        const [
+            { data: userSessions, error: sessionsError },
+            { data: userProgress, error: progressError },
+            { data: subjects, error: subjectsError },
+            { data: topics, error: topicsError },
+            { data: userActivities, error: activitiesError }
+        ] = await Promise.all([
+            supabaseAdmin.from('study_sessions').select('*').eq('user_id', userId),
+            supabaseAdmin.from('learning_progress').select('*').eq('user_id', userId).eq('status', 'completed'),
+            supabaseAdmin.from('subjects').select('*'),
+            supabaseAdmin.from('topics').select('*'),
+            supabaseAdmin.from('activity_logs').select('*').eq('user_id', userId)
+        ]);
 
-        const learningActivities = userActivities.filter(a => !['login', 'logout', 'register'].includes(a.type));
-        const isEmpty = (userSessions.length === 0 && learningActivities.length === 0 && userPdfs.length === 0 && userProgress.length === 0);
+        if (sessionsError) throw sessionsError;
+        if (progressError) throw progressError;
+
+        const sessions = userSessions || [];
+        const progress = userProgress || [];
+        const subs = subjects || [];
+        const tops = topics || [];
+        const activities = userActivities || [];
+
+        const isEmpty = (sessions.length === 0 && progress.length === 0 && activities.length === 0);
 
         if (isEmpty) {
             return res.json({
@@ -32,7 +54,7 @@ export const getAnalyticsSummary = async (req, res) => {
                 totalQuestionsAsked: 0,
                 pdfsUploaded: 0,
                 aiUsageStats: { chatQuestions: 0, quizzesVerified: 0, docSummaries: 0, noteAnalyses: 0 },
-                mostStudiedSubjects: subjects.map(s => ({ id: s.id, title: s.title, studyHours: 0, completedTopics: 0, percentage: 0, iconColor: s.icon_color || '#4f46e5', bgColor: s.bg_color || '#e0e7ff' })),
+                mostStudiedSubjects: subs.map(s => ({ id: s.id, title: s.title, studyHours: 0, completedTopics: 0, percentage: 0, iconColor: s.icon_color || '#4f46e5', bgColor: s.bg_color || '#e0e7ff' })),
                 mostStudiedTopics: [],
                 learningHeatmap: [],
                 activityTimeline: [],
@@ -48,18 +70,18 @@ export const getAnalyticsSummary = async (req, res) => {
         const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
         const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-        let totalSeconds = userSessions.reduce((acc, s) => acc + (s.duration_seconds || 0), 0);
+        let totalSeconds = sessions.reduce((acc, s) => acc + (s.duration_seconds || 0), 0);
 
-        const todaySeconds = userSessions
-            .filter(s => (s.session_date || '') >= todayStr)
+        const todaySeconds = sessions
+            .filter(s => (s.started_at || '').startsWith(todayStr))
             .reduce((acc, s) => acc + (s.duration_seconds || 0), 0);
 
-        let weeklySeconds = userSessions
-            .filter(s => (s.session_date || '') >= sevenDaysAgo)
+        let weeklySeconds = sessions
+            .filter(s => (s.started_at || '') >= sevenDaysAgo)
             .reduce((acc, s) => acc + (s.duration_seconds || 0), 0);
 
-        let monthlySeconds = userSessions
-            .filter(s => (s.session_date || '') >= thirtyDaysAgo)
+        let monthlySeconds = sessions
+            .filter(s => (s.started_at || '') >= thirtyDaysAgo)
             .reduce((acc, s) => acc + (s.duration_seconds || 0), 0);
 
         const formatHoursMins = (secs) => {
@@ -68,25 +90,25 @@ export const getAnalyticsSummary = async (req, res) => {
             return `${h}h ${m}m`;
         };
 
-        const uniqueDates = [...new Set(userSessions.map(s => s.session_date))].sort().reverse();
-        const avgDailyLearningMinutes = uniqueDates.length > 0 ? Math.round((totalSeconds / 60) / uniqueDates.length) : 0;
+        const uniqueDates = [...new Set(sessions.map(s => (s.started_at || '').split('T')[0]))].filter(Boolean).sort().reverse();
+        const avgDailyMinutes = uniqueDates.length > 0 ? Math.round((totalSeconds / 60) / uniqueDates.length) : 0;
 
-        let totalQuestionsAsked = (rawDb.messages || []).filter(m => m.user_id === userId && m.role === 'assistant').length || 
-                                  userActivities.filter(a => a.type === 'chat').length;
+        let totalQuestionsAsked = activities.filter(a => a.action_type === 'chat' || a.action_type === 'CHAT').length;
+        let pdfsUploaded = activities.filter(a => a.action_type === 'UPLOAD_PDF' || a.action_type === 'document_upload').length;
 
         const aiUsageStats = {
             chatQuestions: totalQuestionsAsked,
-            quizzesVerified: userActivities.filter(a => a.type === 'quiz_completed').length,
-            docSummaries: userActivities.filter(a => a.type === 'document_upload').length,
-            noteAnalyses: userActivities.filter(a => a.type === 'notes_updated').length
+            quizzesVerified: activities.filter(a => a.action_type === 'quiz_completed' || a.action_type === 'QUIZ_COMPLETED').length,
+            docSummaries: pdfsUploaded,
+            noteAnalyses: activities.filter(a => a.action_type === 'notes_updated' || a.action_type === 'NOTES_UPDATED').length
         };
 
-        const mostStudiedSubjects = subjects.map(sub => {
-            const completed = userProgress.filter(p => {
-                const top = topics.find(t => t.id === p.topic_id);
+        const mostStudiedSubjects = subs.map(sub => {
+            const completed = progress.filter(p => {
+                const top = tops.find(t => t.id === p.topic_id);
                 return top && top.subject_id === sub.id;
             }).length;
-            const studySecs = userSessions.filter(s => s.subject_id === sub.id || s.subject === sub.title).reduce((acc, s) => acc + (s.duration_seconds || 0), 0);
+            const studySecs = sessions.filter(s => s.subject_id === sub.id).reduce((acc, s) => acc + (s.duration_seconds || 0), 0);
             const total = sub.total_topics || 20;
             return {
                 id: sub.id,
@@ -99,19 +121,23 @@ export const getAnalyticsSummary = async (req, res) => {
                 studyHours: Math.round(studySecs / 3600 * 10) / 10
             };
         }).sort((a, b) => b.studyHours - a.studyHours);
+
         const topicCounts = {};
-        userActivities.forEach(act => {
-            if (act.topicName || act.topic_name) {
-                const name = act.topicName || act.topic_name;
-                topicCounts[name] = (topicCounts[name] || 0) + (act.duration || 120);
+        sessions.forEach(s => {
+            if (s.topic_id) {
+                topicCounts[s.topic_id] = (topicCounts[s.topic_id] || 0) + (s.duration_seconds || 0);
             }
         });
         
-        let mostStudiedTopics = Object.entries(topicCounts).map(([title, duration]) => ({
-            title,
-            durationMins: Math.round(duration / 60) || 5,
-            subjectName: userActivities.find(a => (a.topicName || a.topic_name) === title)?.subjectName || 'Computer Science'
-        })).sort((a, b) => b.durationMins - a.durationMins).slice(0, 5);
+        let mostStudiedTopics = Object.entries(topicCounts).map(([topicId, durationSecs]) => {
+            const top = tops.find(t => t.id === topicId);
+            const sub = top ? subs.find(s => s.id === top.subject_id) : null;
+            return {
+                title: top ? top.title : 'Unknown Topic',
+                durationMins: Math.round(durationSecs / 60),
+                subjectName: sub ? sub.title : 'Computer Science'
+            };
+        }).sort((a, b) => b.durationMins - a.durationMins).slice(0, 5);
 
         const heatmap = [];
         const endDate = new Date();
@@ -119,8 +145,8 @@ export const getAnalyticsSummary = async (req, res) => {
             const d = new Date();
             d.setDate(endDate.getDate() - idx);
             const dStr = d.toISOString().split('T')[0];
-            const daySessions = userSessions.filter(s => s.session_date === dStr);
-            const dayActs = userActivities.filter(a => (a.created_at || a.timestamp || '').split('T')[0] === dStr);
+            const daySessions = sessions.filter(s => (s.started_at || '').startsWith(dStr));
+            const dayActs = activities.filter(a => (a.created_at || '').startsWith(dStr));
             const daySeconds = daySessions.reduce((acc, s) => acc + (s.duration_seconds || 0), 0) + (dayActs.length * 120);
             
             let intensity = 0;
@@ -128,8 +154,6 @@ export const getAnalyticsSummary = async (req, res) => {
             else if (daySeconds > 3600) intensity = 3;
             else if (daySeconds > 1800) intensity = 2;
             else if (daySeconds > 0 || dayActs.length > 0) intensity = 1;
-
-
 
             heatmap.push({ date: dStr, seconds: daySeconds, activitiesCount: dayActs.length, intensity });
         }
@@ -142,31 +166,28 @@ export const getAnalyticsSummary = async (req, res) => {
             const dateStr = d.toISOString().split('T')[0];
             growthLabels.push(i === 0 ? 'Today' : `Day -${i}`);
             
-            const cumulativeSeconds = userSessions
-                .filter(s => (s.session_date || '') <= dateStr)
+            const cumulativeSeconds = sessions
+                .filter(s => (s.started_at || '') <= dateStr + 'T23:59:59')
                 .reduce((acc, s) => acc + (s.duration_seconds || 0), 0);
             let hoursVal = Math.round((cumulativeSeconds / 3600) * 10) / 10;
-            if (isDemoUser && hoursVal === 0) {
-                hoursVal = Math.round((24.5 * (0.7 + (6 - i) * 0.05)) * 10) / 10;
-            }
             growthData.push(hoursVal);
         }
 
-        const activityTimeline = userActivities
-            .sort((a, b) => new Date(b.created_at || b.timestamp) - new Date(a.created_at || a.timestamp))
+        const activityTimeline = activities
+            .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
             .slice(0, 50)
             .map(act => ({
-                id: act.id || Math.random().toString(),
-                userId: act.user_id || act.userId || userId,
-                type: act.type || 'study',
-                title: act.title || 'Learning Activity',
-                description: act.description || 'Active study engagement',
-                subjectName: act.subjectName || act.subject_name || 'General Study',
-                topicName: act.topicName || act.topic_name || null,
-                timestamp: act.created_at || act.timestamp || new Date().toISOString(),
-                duration: act.duration || null,
-                status: act.status || 'Completed',
-                metadata: act.metadata || act.extraData || null
+                id: act.id,
+                userId: act.user_id,
+                type: act.action_type || 'study',
+                title: act.metadata?.title || 'Learning Activity',
+                description: act.metadata?.description || 'Active study engagement',
+                subjectName: act.metadata?.subjectName || 'General Study',
+                topicName: act.metadata?.topicName || null,
+                timestamp: act.created_at,
+                duration: act.metadata?.duration || null,
+                status: act.metadata?.status || 'Completed',
+                metadata: act.metadata || null
             }));
 
         res.json({
@@ -180,8 +201,8 @@ export const getAnalyticsSummary = async (req, res) => {
             totalStudyHours: formatHoursMins(totalSeconds),
             rawTotalSeconds: totalSeconds,
             avgDailyLearningMinutes: avgDailyMinutes,
-            totalQuestionsAsked: totalQuestions,
-            pdfsUploaded: userPdfs.length + (isDemoUser ? 3 : 0),
+            totalQuestionsAsked,
+            pdfsUploaded,
             aiUsageStats,
             mostStudiedSubjects,
             mostStudiedTopics,
@@ -196,12 +217,13 @@ export const getAnalyticsSummary = async (req, res) => {
                 labels: growthLabels,
                 data: growthData
             },
-            learningConsistency,
-            currentStreak: isDemoUser ? Math.max(7, uniqueActiveDays30.size) : uniqueActiveDays30.size
+            learningConsistency: 0,
+            currentStreak: uniqueDates.length
         });
     } catch (err) {
         console.error("Analytics API Error:", err);
-        res.status(500).json({ error: 'Failed to retrieve analytics summary.' });
+        res.status(err.message === 'Unauthorized' || err.message === 'No authorization header' ? 401 : 500)
+           .json({ error: err.message || 'Failed to retrieve analytics summary.' });
     }
 };
 

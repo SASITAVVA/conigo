@@ -1,39 +1,56 @@
-import crypto from 'crypto';
-import { db } from '../services/db.js';
+import { supabaseAdmin } from '../services/supabase.js';
 import { EventSystem } from '../services/events.js';
 import { checkAndAwardBadges } from '../controllers/gamificationController.js';
 
-export const getProgressSummary = async (req, res) => {
-    const userId = req.query.userId || '11111111-1111-1111-1111-111111111111';
-    const isDemoUser = (userId === '11111111-1111-1111-1111-111111111111');
+const getUserFromReq = async (req) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        throw new Error('Unauthorized');
+    }
+    const token = authHeader.split(' ')[1];
+    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+    if (error || !user) throw new Error('Unauthorized');
+    return user.id;
+};
 
+export const getProgressSummary = async (req, res) => {
     try {
-        db.autoSeedUser(userId);
-        const rawDb = db.getRawLocalDb();
-        const subjects = rawDb.subjects || [];
-        const allTopics = rawDb.topics || [];
-        const userProgress = (rawDb.progress || []).filter(p => p.user_id === userId);
+        let userId;
+        try {
+            userId = await getUserFromReq(req);
+        } catch (e) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        const [
+            { data: subjectsData },
+            { data: topicsData },
+            { data: progressData },
+            { data: sessionsData }
+        ] = await Promise.all([
+            supabaseAdmin.from('subjects').select('*'),
+            supabaseAdmin.from('topics').select('*'),
+            supabaseAdmin.from('learning_progress').select('*').eq('user_id', userId),
+            supabaseAdmin.from('study_sessions').select('*').eq('user_id', userId)
+        ]);
+
+        const subjects = subjectsData || [];
+        const allTopics = topicsData || [];
+        const userProgress = progressData || [];
 
         let totalTopics = subjects.reduce((acc, s) => acc + (s.total_topics || 20), 0);
+        if (totalTopics === 0) totalTopics = 120; // fallback
+
         let completedTopics = userProgress.filter(p => p.status === 'completed').length;
-        if (isDemoUser && userProgress.length === 0) {
-            completedTopics = subjects.reduce((acc, s) => acc + (s.completed_topics || 0), 0);
-        }
-        
         let inProgressTopics = userProgress.filter(p => p.status === 'in_progress').length;
         let notStartedTopics = Math.max(0, totalTopics - completedTopics - inProgressTopics);
-        let percentage = Math.round((completedTopics / Math.max(totalTopics, 1)) * 100);
+        let percentage = Math.round((completedTopics / Math.max(totalTopics, 1)) * 100) || 0;
 
         const subjectBreakdown = subjects.map(sub => {
-            let completed = 0;
-            if (isDemoUser && userProgress.length === 0) {
-                completed = sub.completed_topics || 0;
-            } else {
-                completed = userProgress.filter(p => {
-                    const top = allTopics.find(t => t.id === p.topic_id && p.status === 'completed');
-                    return top && top.subject_id === sub.id;
-                }).length;
-            }
+            const completed = userProgress.filter(p => {
+                const top = allTopics.find(t => t.id === p.topic_id);
+                return p.status === 'completed' && ((top && top.subject_id === sub.id) || p.subject_id === sub.id);
+            }).length;
             const total = sub.total_topics || 20;
             return {
                 id: sub.id,
@@ -46,7 +63,6 @@ export const getProgressSummary = async (req, res) => {
             };
         });
 
-        const allSessions = (rawDb.study_sessions || []).filter(s => s.user_id === userId);
         const timeSeriesLabels = [];
         const timeSeriesData = [];
         const now = new Date();
@@ -57,16 +73,13 @@ export const getProgressSummary = async (req, res) => {
             const dateStr = d.toISOString().split('T')[0];
             
             timeSeriesLabels.push(i === 0 ? 'Today' : `Day -${i}`);
-            if (isDemoUser && allSessions.length === 0) {
-                timeSeriesData.push(Math.min(100, Math.round(percentage * (0.8 + (6-i)*0.03))));
-            } else {
-                const cumulativeCompleted = userProgress.filter(p => (p.completed_at || p.created_at || '').split('T')[0] <= dateStr && p.status === 'completed').length;
-                timeSeriesData.push(Math.round((cumulativeCompleted / Math.max(totalTopics, 1)) * 100));
-            }
+            
+            const cumulativeCompleted = userProgress.filter(p => p.status === 'completed' && (p.created_at || '').split('T')[0] <= dateStr).length;
+            timeSeriesData.push(Math.round((cumulativeCompleted / Math.max(totalTopics, 1)) * 100));
         }
 
         const completedTopicList = allTopics
-            .filter(t => (isDemoUser && t.completed && userProgress.length === 0) || userProgress.some(p => p.topic_id === t.id && p.status === 'completed'))
+            .filter(t => userProgress.some(p => p.topic_id === t.id && p.status === 'completed'))
             .map(t => {
                 const sub = subjects.find(s => s.id === t.subject_id);
                 return {
@@ -78,7 +91,7 @@ export const getProgressSummary = async (req, res) => {
             }).slice(0, 8);
 
         const upcomingTopicList = allTopics
-            .filter(t => !(isDemoUser && t.completed && userProgress.length === 0) && !userProgress.some(p => p.topic_id === t.id && p.status === 'completed'))
+            .filter(t => !userProgress.some(p => p.topic_id === t.id && p.status === 'completed'))
             .map(t => {
                 const sub = subjects.find(s => s.id === t.subject_id);
                 return {
@@ -114,50 +127,64 @@ export const getProgressSummary = async (req, res) => {
 };
 
 export const updateProgress = async (req, res) => {
-    const { userId = '11111111-1111-1111-1111-111111111111', topicId, topicTitle, subjectId, status = 'completed', masteryScore = 100 } = req.body;
-    
     try {
-        const rawDb = db.getRawLocalDb();
-
-        let topicObj = (rawDb.topics || []).find(t => t.id === topicId || t.title === topicTitle);
-        if (topicObj && status === 'completed') {
-          topicObj.completed = true;
+        let userId;
+        try {
+            userId = await getUserFromReq(req);
+        } catch (e) {
+            return res.status(401).json({ error: 'Unauthorized' });
         }
 
-        let record = (rawDb.progress || []).find(p => p.user_id === userId && (p.topic_id === topicId || p.topic === topicTitle));
-        if (!record) {
-          record = {
-            id: "prog-" + crypto.randomUUID(),
-            user_id: userId,
-            topic_id: topicId || "top-custom",
-            subject_id: subjectId || (topicObj ? topicObj.subject_id : 'sub-dsa'),
-            status,
-            mastery_score: masteryScore,
-            study_time_seconds: 1800,
-            quiz_accuracy: 100,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          };
-          rawDb.progress = rawDb.progress || [];
-          rawDb.progress.push(record);
+        const { topicId, topicTitle, subjectId, status = 'completed', masteryScore = 100 } = req.body;
+        
+        // Find existing record
+        let { data: existingProgress } = await supabaseAdmin
+            .from('learning_progress')
+            .select('*')
+            .eq('user_id', userId)
+            .eq('topic_id', topicId)
+            .maybeSingle();
+
+        let record;
+        if (!existingProgress) {
+            const { data: newRecord, error: insertErr } = await supabaseAdmin
+                .from('learning_progress')
+                .insert({
+                    user_id: userId,
+                    topic_id: topicId,
+                    subject_id: subjectId,
+                    status,
+                    mastery_score: masteryScore
+                })
+                .select()
+                .single();
+            if (insertErr) throw insertErr;
+            record = newRecord;
         } else {
-          record.status = status;
-          record.mastery_score = Math.max(record.mastery_score || 0, masteryScore);
-          record.updated_at = new Date().toISOString();
+            const { data: updatedRecord, error: updateErr } = await supabaseAdmin
+                .from('learning_progress')
+                .update({
+                    status,
+                    mastery_score: Math.max(existingProgress.mastery_score || 0, masteryScore)
+                })
+                .eq('id', existingProgress.id)
+                .select()
+                .single();
+            if (updateErr) throw updateErr;
+            record = updatedRecord;
         }
 
-        const sub = (rawDb.subjects || []).find(s => s.id === (subjectId || (topicObj ? topicObj.subject_id : null)));
-        if (sub && status === 'completed') {
-          sub.completed_topics = Math.min((sub.total_topics || 20), (sub.completed_topics || 0) + 1);
-        }
-
-        db.saveRawLocalDb(rawDb);
+        // Add to activity logs
+        await supabaseAdmin.from('activity_logs').insert({
+            user_id: userId,
+            action_type: `topic_${status}`,
+        });
 
         await EventSystem.emit('TOPIC_COMPLETED', {
-          userId,
-          title: `Completed Topic: ${topicObj ? topicObj.title : (topicTitle || 'Algorithm Concept')}`,
-          details: { topicId, status, masteryScore },
-          xpAward: 30
+            userId,
+            title: `Completed Topic: ${topicTitle || 'Algorithm Concept'}`,
+            details: { topicId, status, masteryScore },
+            xpAward: 30
         });
 
         await checkAndAwardBadges(userId);

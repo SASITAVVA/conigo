@@ -1,7 +1,17 @@
 import crypto from 'crypto';
-import { supabase } from '../config/supabase.js';
-import { db } from '../services/db.js';
+import { supabaseAdmin, activityLogService } from '../services/supabase.js';
 import { getGeminiChatStream } from '../services/gemini.js';
+
+const getUserId = async (req) => {
+  if (req.user?.id) return req.user.id;
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.split(' ')[1];
+    const { data: { user } } = await supabaseAdmin.auth.getUser(token);
+    if (user?.id) return user.id;
+  }
+  return req.body.userId || req.query.userId || '11111111-1111-1111-1111-111111111111';
+};
 import { EventSystem } from '../services/events.js';
 import { checkAndAwardBadges } from '../controllers/gamificationController.js';
 
@@ -21,11 +31,8 @@ const getExtractor = async () => {
 };
 
 // Hybrid multi-PDF RAG search matching across keyword n-grams and vector embeddings
-function findRelevantChunks(rawDb, userId, queryText, queryEmbeddingArray) {
-    const allChunks = rawDb.document_chunks || [];
-    const userChunks = allChunks.filter(c => !c.user_id || c.user_id === userId || c.user_id === 'all' || c.user_id === '11111111-1111-1111-1111-111111111111');
-    
-    if (userChunks.length === 0) return [];
+function findRelevantChunks(userChunks, userId, queryText, queryEmbeddingArray) {
+    if (!userChunks || userChunks.length === 0) return [];
 
     const keywords = queryText.toLowerCase()
         .replace(/[^a-z0-9\s]/g, '')
@@ -102,7 +109,8 @@ function getModeInstruction(mode) {
 }
 
 export const handleChatMessage = async (req, res) => {
-    const { message, userId = '11111111-1111-1111-1111-111111111111', mode = 'standard', chatId } = req.body;
+    const userId = await getUserId(req);
+    const { message, mode = 'standard', chatId } = req.body;
     const startTime = Date.now();
 
     if (!message) {
@@ -110,10 +118,9 @@ export const handleChatMessage = async (req, res) => {
     }
 
     try {
-        const rawDb = db.getRawLocalDb();
         const activeChatId = chatId || "chat-" + crypto.randomUUID();
 
-        let chatThread = (rawDb.chat_history || []).find(c => c.id === activeChatId);
+        let { data: chatThread } = await supabaseAdmin.from('chat_history').select('*').eq('id', activeChatId).single();
         if (!chatThread) {
           chatThread = {
             id: activeChatId,
@@ -123,9 +130,8 @@ export const handleChatMessage = async (req, res) => {
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
           };
-          rawDb.chat_history = rawDb.chat_history || [];
-          rawDb.chat_history.unshift(chatThread);
-          db.saveRawLocalDb(rawDb);
+          await supabaseAdmin.from('chat_history').insert(chatThread);
+          await activityLogService({ userId, actionType: 'AI_CHAT_STARTED', entityType: 'chat_history', entityId: activeChatId, metadata: { title: chatThread.title } });
           
           await EventSystem.emit('AI_CHAT_STARTED', { userId, title: `Started new knowledge session: ${chatThread.title}`, xpAward: 5 });
         }
@@ -142,7 +148,9 @@ export const handleChatMessage = async (req, res) => {
               } catch(e) {}
           }
           
-          matchedChunks = findRelevantChunks(rawDb, userId, message, embeddingArray);
+          const { data: userChunks = [] } = await supabaseAdmin.from('document_chunks').select('*')
+            .or(`user_id.eq.${userId},user_id.is.null,user_id.eq.all,user_id.eq.11111111-1111-1111-1111-111111111111`);
+          matchedChunks = findRelevantChunks(userChunks, userId, message, embeddingArray);
 
           if (matchedChunks && matchedChunks.length > 0) {
               contextText = "=== RETRIEVED KNOWLEDGE FROM USER'S UPLOADED PDF DOCUMENTS ===\n" + 
@@ -154,9 +162,13 @@ export const handleChatMessage = async (req, res) => {
           contextText = "[OFFLINE KNOWLEDGE LOOKUP: Document retrieval system is currently unavailable.]";
         }
 
-        const priorMessages = (rawDb.messages || [])
-            .filter(m => m.chat_id === activeChatId && m.question && m.answer)
-            .slice(-6); // Increased memory to 6 turns
+        const { data: priorMessagesRaw } = await supabaseAdmin.from('ai_tutor_messages')
+            .select('*')
+            .eq('chat_id', activeChatId)
+            .order('created_at', { ascending: false })
+            .limit(6);
+            
+        const priorMessages = (priorMessagesRaw || []).reverse();
         
         const conversationMemory = [];
         priorMessages.forEach(pm => {
@@ -279,10 +291,10 @@ ${contextText}`;
           response_time_ms: responseTimeMs,
           created_at: new Date().toISOString()
         };
-        await db.insert('messages', msgRecord);
+        await supabaseAdmin.from('ai_tutor_messages').insert(msgRecord);
+        await supabaseAdmin.from('chat_history').update({ updated_at: new Date().toISOString() }).eq('id', activeChatId);
 
-        if (chatThread) chatThread.updated_at = new Date().toISOString();
-        db.saveRawLocalDb(db.getRawLocalDb());
+        await activityLogService({ userId, actionType: 'AI_TUTOR_MESSAGE_SENT', entityType: 'ai_tutor_message', entityId: msgRecord.id, metadata: { chatId: activeChatId, responseTimeMs } });
 
         await EventSystem.emit('AI_CHAT_MESSAGE_SENT', {
           userId,
@@ -302,29 +314,20 @@ ${contextText}`;
 };
 
 export const getChatHistory = async (req, res) => {
-  const userId = req.query.userId || '11111111-1111-1111-1111-111111111111';
-  const rawDb = db.getRawLocalDb();
-  const history = (rawDb.chat_history || []).filter(c => c.user_id === userId);
+  const userId = await getUserId(req);
+  const { data: history = [] } = await supabaseAdmin.from('chat_history').select('*').eq('user_id', userId).order('updated_at', { ascending: false });
   res.json({ success: true, conversations: history });
 };
 
 export const renameConversation = async (req, res) => {
   const { title } = req.body;
-  const rawDb = db.getRawLocalDb();
-  const thread = (rawDb.chat_history || []).find(c => c.id === req.params.id);
-  if (thread) {
-    thread.title = title;
-    thread.updated_at = new Date().toISOString();
-    db.saveRawLocalDb(rawDb);
-  }
+  await supabaseAdmin.from('chat_history').update({ title, updated_at: new Date().toISOString() }).eq('id', req.params.id);
   res.json({ success: true });
 };
 
 export const deleteConversation = async (req, res) => {
-  const rawDb = db.getRawLocalDb();
-  rawDb.chat_history = (rawDb.chat_history || []).filter(c => c.id !== req.params.id);
-  rawDb.messages = (rawDb.messages || []).filter(m => m.chat_id !== req.params.id);
-  db.saveRawLocalDb(rawDb);
+  await supabaseAdmin.from('ai_tutor_messages').delete().eq('chat_id', req.params.id);
+  await supabaseAdmin.from('chat_history').delete().eq('id', req.params.id);
   res.json({ success: true });
 };
 

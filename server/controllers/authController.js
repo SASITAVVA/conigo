@@ -74,7 +74,13 @@ export const syncSession = async (req, res) => {
     }
 
     // 3. Log the activity
-    await activityLogService(userId, 'LOGIN', 'User Logged In', 'User synchronized session successfully.');
+    await activityLogService({
+      userId: userId,
+      actionType: 'LOGIN',
+      entityType: 'user',
+      entityId: userId,
+      metadata: { method: 'token_sync' }
+    });
 
     // 4. Return success and the profile
     const frontendUser = {
@@ -123,7 +129,13 @@ export const updateProfile = async (req, res) => {
 
     if (error) return res.status(404).json({ error: 'Profile update failed.' });
 
-    await activityLogService(user.id, 'PROFILE_UPDATED', 'Updated Profile', 'User updated their profile.');
+    await activityLogService({
+      userId: user.id,
+      actionType: 'PROFILE_UPDATED',
+      entityType: 'profile',
+      entityId: user.id,
+      metadata: updates
+    });
     res.json({ success: true, profile });
   } catch (e) {
     res.status(500).json({ error: e.message });

@@ -27,7 +27,7 @@ import progressRoutes from './routes/progress.js';
 import gamificationRoutes from './routes/gamification.js';
 import studySessionRoutes from './routes/studySessions.js';
 import searchRoutes from './routes/search.js';
-import adminRoutes from './routes/admin.js';
+// Admin routes removed
 import studyMaterialRoutes from './routes/studyMaterials.js';
 import courseRoutes from './routes/courses.js';
 import analyticsRoutes from './routes/analytics.js';
@@ -79,7 +79,7 @@ app.use('/api/progress', progressRoutes);
 app.use('/api/gamification', gamificationRoutes);
 app.use('/api/study-sessions', studySessionRoutes);
 app.use('/api/search', searchRoutes);
-app.use('/api/admin', adminRoutes);
+// Admin routes completely removed
 app.use('/api/study-materials', studyMaterialRoutes);
 app.use('/api/courses', courseRoutes);
 app.use('/api/analytics', analyticsRoutes);

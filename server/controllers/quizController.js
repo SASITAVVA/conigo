@@ -1,11 +1,23 @@
 import crypto from 'crypto';
-import { db } from '../services/db.js';
+import { supabaseAdmin, activityLogService } from '../services/supabase.js';
 import { generateQuiz as geminiGenerateQuiz } from '../services/gemini.js';
+
+const getUserId = async (req) => {
+  if (req.user?.id) return req.user.id;
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.split(' ')[1];
+    const { data: { user } } = await supabaseAdmin.auth.getUser(token);
+    if (user?.id) return user.id;
+  }
+  return req.body.userId || req.query.userId || '11111111-1111-1111-1111-111111111111';
+};
 import { EventSystem } from '../services/events.js';
 import { checkAndAwardBadges } from '../controllers/gamificationController.js';
 
 export const generateQuiz = async (req, res) => {
-  const { userId = '11111111-1111-1111-1111-111111111111', topic, text, difficulty = 'Medium', questionCount = 10 } = req.body;
+  const userId = await getUserId(req);
+  const { topic, text, difficulty = 'Medium', questionCount = 10 } = req.body;
 
   try {
     let contextText = "";
@@ -55,7 +67,9 @@ export const generateQuiz = async (req, res) => {
       total_questions: quizData.questions ? quizData.questions.length : 10,
       created_at: new Date().toISOString()
     };
-    await db.insert('quizzes', newQuiz);
+    await supabaseAdmin.from('quizzes').insert(newQuiz);
+    
+    await activityLogService({ userId, actionType: 'QUIZ_GENERATED', entityType: 'quiz', entityId: quizId, metadata: { topic: mainTopic, difficulty } });
 
     await EventSystem.emit('QUIZ_STARTED', {
       userId,
@@ -73,7 +87,8 @@ export const generateQuiz = async (req, res) => {
 
 export const submitQuiz = async (req, res) => {
   try {
-    const { quizId, userId = '11111111-1111-1111-1111-111111111111', score, totalQuestions, timeTakenSeconds = 120 } = req.body;
+    const userId = await getUserId(req);
+    const { quizId, score, totalQuestions, timeTakenSeconds = 120 } = req.body;
     
     const accuracy = totalQuestions > 0 ? Math.round((score / totalQuestions) * 100) : 0;
     const correctAnswers = Number(score);
@@ -90,7 +105,9 @@ export const submitQuiz = async (req, res) => {
       wrong_answers: wrongAnswers,
       submitted_at: new Date().toISOString()
     };
-    await db.insert('quiz_results', resultRecord);
+    await supabaseAdmin.from('quiz_attempts').insert(resultRecord);
+    
+    await activityLogService({ userId, actionType: 'QUIZ_COMPLETED', entityType: 'quiz_attempt', entityId: resultRecord.id, metadata: { score: correctAnswers, accuracy } });
 
     let xpReward = correctAnswers * 15;
     if (accuracy === 100) xpReward += 50; // Perfect score bonus

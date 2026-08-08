@@ -2556,14 +2556,24 @@ document.addEventListener('DOMContentLoaded', () => {
     window.getFilteredDeck = () => {
         let cards = (window.appState && window.appState.state && window.appState.state.studyMaterials ? window.appState.state.studyMaterials.flashcards : null) || window.fcAllCards || [];
         
-        // Filter by Category
+        // Filter by Category (support both 'category' field from old DB and 'topic' field from Supabase)
         if (window.fcActiveCategory && window.fcActiveCategory !== 'all') {
-            cards = cards.filter(c => c.category === window.fcActiveCategory);
+            cards = cards.filter(c => c.category === window.fcActiveCategory || c.topic === window.fcActiveCategory);
         }
+
+        const todayStr = new Date().toISOString().split('T')[0];
 
         // Filter by Tab Pill
         if (window.fcActiveFilter === 'today') {
-            cards = cards.filter(c => c.next_review_date && (c.next_review_date.includes('Today') || c.next_review_date === new Date().toISOString().split('T')[0] || c.times_reviewed <= 3));
+            cards = cards.filter(c => 
+                (c.next_review_date && (
+                    c.next_review_date.includes('Today') || 
+                    c.next_review_date === todayStr ||
+                    c.next_review_date >= todayStr
+                )) || 
+                !c.next_review_date ||
+                (c.times_reviewed !== undefined && c.times_reviewed <= 3)
+            );
         } else if (window.fcActiveFilter === 'bookmarked') {
             cards = cards.filter(c => c.bookmarked || c.is_favorite);
         } else if (window.fcActiveFilter === 'revision') {
@@ -2577,7 +2587,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Filter by Search Query
         if (window.fcSearchQuery && window.fcSearchQuery.trim() !== '') {
             const q = window.fcSearchQuery.trim().toLowerCase();
-            cards = cards.filter(c => (c.question && c.question.toLowerCase().includes(q)) || (c.answer && c.answer.toLowerCase().includes(q)) || (c.category && c.category.toLowerCase().includes(q)));
+            cards = cards.filter(c => (c.question && c.question.toLowerCase().includes(q)) || (c.answer && c.answer.toLowerCase().includes(q)) || (c.category && c.category.toLowerCase().includes(q)) || (c.topic && c.topic.toLowerCase().includes(q)));
         }
         return cards;
     };
@@ -2618,8 +2628,10 @@ document.addEventListener('DOMContentLoaded', () => {
             // Discover custom topics added when the user saved Study Notes!
             const noteTopics = [];
             allCards.forEach(c => {
-                if (c.category && !categoriesList.includes(c.category) && !noteTopics.includes(c.category)) {
-                    noteTopics.push(c.category);
+                // Supabase cards use 'topic' field; old local cards use 'category'
+                const cardCategory = c.category || c.topic;
+                if (cardCategory && !categoriesList.includes(cardCategory) && !noteTopics.includes(cardCategory)) {
+                    noteTopics.push(cardCategory);
                 }
             });
             // Put saved notes topics at the very top of the list for immediate study!

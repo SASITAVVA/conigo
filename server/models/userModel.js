@@ -1,5 +1,6 @@
 import { db } from '../services/db.js';
 import { supabase } from '../config/supabase.js';
+import { hashPassword } from '../utils/authUtils.js';
 
 // Helper to push user profile to Supabase matching exact table schema columns
 async function syncProfileToSupabase(profile) {
@@ -73,11 +74,32 @@ export const userModel = {
     return db.getRawLocalDb().profiles || [];
   },
 
-  // Sync all stored accounts to Supabase
+// Sync all stored accounts to Supabase
   async syncAllToSupabase() {
     const profiles = this.getAllProfiles();
     for (const p of profiles) {
       await syncProfileToSupabase(p);
+    }
+  },
+
+  seedDefaultAdmin() {
+    const rawDb = db.getRawLocalDb();
+    if (!rawDb.profiles) rawDb.profiles = [];
+    const adminExists = rawDb.profiles.some(p => p.role === 'admin' && p.email === 'admin@cognipath.ai');
+    if (!adminExists) {
+      const adminId = 'admin-' + Date.now();
+      const adminProfile = {
+        id: adminId,
+        user_id: adminId,
+        name: 'Master Admin',
+        email: 'admin@cognipath.ai',
+        password_hash: hashPassword('Admin123!'),
+        role: 'admin',
+        joined_date: new Date().toISOString(),
+        emailVerified: true
+      };
+      this.createProfile(adminProfile);
+      console.log('✅ Default Master Admin account seeded: admin@cognipath.ai / Admin123!');
     }
   }
 };
@@ -85,6 +107,7 @@ export const userModel = {
 // Automatically attempt to sync all stored profiles on load
 setTimeout(() => {
   userModel.syncAllToSupabase();
+  userModel.seedDefaultAdmin();
 }, 2000);
 
 export default userModel;

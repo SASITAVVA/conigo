@@ -26,9 +26,16 @@ export const optionalAuth = (req, res, next) => {
 };
 
 export const checkAdmin = (req, res, next) => {
-  const userId = (req.query && req.query.userId) || (req.body && req.body.userId) || '11111111-1111-1111-1111-111111111111';
-  const profile = userModel.findProfileById(userId);
-  if (profile && (profile.role === 'admin' || userId === '11111111-1111-1111-1111-111111111111')) {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : (req.query.token || req.headers['x-access-token']);
+  if (!token) return res.status(401).json({ error: 'Authentication required for Admin Access.' });
+  
+  const user = verifyToken(token);
+  if (!user) return res.status(401).json({ error: 'Invalid or expired token.' });
+  
+  const profile = userModel.findProfileById(user.id);
+  if (profile && profile.role === 'admin') {
+    req.user = profile;
     next();
   } else {
     res.status(403).json({ error: 'Administrative privileges required.' });

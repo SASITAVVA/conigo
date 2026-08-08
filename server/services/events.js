@@ -59,6 +59,7 @@ export const EventSystem = {
         created_at: new Date().toISOString()
       };
       await db.insert('recent_activity', activityRecord);
+      await db.insert('activity_logs', activityRecord);
     }
 
     // 2. Award XP and update levels if xpAward > 0

@@ -22,6 +22,10 @@ document.addEventListener('DOMContentLoaded', () => {
         appContainer.classList.remove('hidden');
         const emailDisplay = document.getElementById('sidebarEmailDisplay') || document.getElementById('userNameDisplay');
         if (emailDisplay) emailDisplay.innerText = currentUser.email;
+        if (currentUser.role === 'admin') {
+            const adminNavItem = document.getElementById('nav-admin-item');
+            if (adminNavItem) adminNavItem.style.display = 'flex';
+        }
     }
 
     // --- Toast Notification System ---
@@ -296,6 +300,10 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const emailDisplay = document.getElementById('sidebarEmailDisplay') || document.getElementById('userNameDisplay');
             if (emailDisplay) emailDisplay.innerText = currentUser.email;
+            if (currentUser.role === 'admin') {
+                const adminNavItem = document.getElementById('nav-admin-item');
+                if (adminNavItem) adminNavItem.style.display = 'flex';
+            }
             
         } catch (error) {
             authError.innerText = error.message;

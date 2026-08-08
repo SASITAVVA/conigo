@@ -22,7 +22,12 @@ export const dbConfig = {
     'notifications',
     'recent_activity',
     'notes',
-    'quizzes'
+    'quizzes',
+    'quiz_results',
+    'pdf_uploads',
+    'activity_logs',
+    'admin_logs',
+    'chat_history'
   ]
 };
 

@@ -217,9 +217,117 @@ export const deleteUser = async (req, res) => {
   res.json({ success: true, message: 'User account removed from database.' });
 };
 
+export const getUsers = async (req, res) => {
+  try {
+    const rawDb = db.getRawLocalDb();
+    const allProfiles = rawDb.profiles || [];
+    
+    const users = allProfiles.map(p => {
+      const uId = p.user_id || p.id;
+      // Get basic stats
+      const userSessions = (rawDb.study_sessions || []).filter(s => s.user_id === uId);
+      const totalSec = userSessions.reduce((acc, s) => acc + (Number(s.duration_seconds) || 0), 0);
+      const userPdfs = (rawDb.pdf_uploads || []).filter(doc => doc.user_id === uId);
+      const userProgress = (rawDb.progress || []).filter(pr => pr.user_id === uId);
+      
+      return {
+        id: uId,
+        name: p.name || 'Unknown',
+        email: p.email || 'N/A',
+        role: p.role || 'student',
+        status: p.status || 'Active',
+        joined_date: p.joined_date || new Date().toISOString(),
+        last_login: p.last_login || p.updated_at || new Date().toISOString(),
+        studyTimeSeconds: totalSec,
+        pdfCount: userPdfs.length,
+        topicsStarted: userProgress.length,
+        topicsCompleted: userProgress.filter(pr => pr.status === 'completed').length,
+      };
+    });
+    
+    res.json({ success: true, users });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const getUserDetails = async (req, res) => {
+  try {
+    const targetId = req.params.id;
+    const rawDb = db.getRawLocalDb();
+    const profile = (rawDb.profiles || []).find(p => p.id === targetId || p.user_id === targetId);
+    
+    if (!profile) return res.status(404).json({ error: 'User not found.' });
+    
+    const sessions = (rawDb.study_sessions || []).filter(s => s.user_id === targetId);
+    const pdfs = (rawDb.pdf_uploads || []).filter(d => d.user_id === targetId);
+    const progress = (rawDb.progress || []).filter(p => p.user_id === targetId);
+    const quizzes = (rawDb.quiz_results || []).filter(q => q.user_id === targetId);
+    const flashcards = (rawDb.flashcards || []).filter(f => f.user_id === targetId);
+    const chatHistory = (rawDb.chat_history || []).filter(c => c.user_id === targetId);
+    const activityLogs = (rawDb.activity_logs || []).filter(a => a.user_id === targetId).sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+    
+    res.json({
+      success: true,
+      profile,
+      sessions,
+      pdfs,
+      progress,
+      quizzes,
+      flashcards,
+      chatHistory,
+      activityLogs
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const updateUserStatus = async (req, res) => {
+  try {
+    const targetId = req.params.id;
+    const { status } = req.body;
+    
+    const rawDb = db.getRawLocalDb();
+    const profile = (rawDb.profiles || []).find(p => p.id === targetId || p.user_id === targetId);
+    if (!profile) return res.status(404).json({ error: 'User not found.' });
+    
+    profile.status = status;
+    db.saveRawLocalDb(rawDb);
+    
+    res.json({ success: true, profile });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const getAnalytics = async (req, res) => {
+  try {
+    const rawDb = db.getRawLocalDb();
+    const users = rawDb.profiles || [];
+    const sessions = rawDb.study_sessions || [];
+    const quizzes = rawDb.quiz_results || [];
+    
+    res.json({
+      success: true,
+      totalUsers: users.length,
+      activeUsers: users.filter(u => u.status !== 'Inactive' && u.status !== 'Suspended').length,
+      totalSessions: sessions.length,
+      totalQuizzes: quizzes.length,
+      // We can expand this with more time-series aggregations later
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
 export default {
   getAdminSummary,
   createCourse,
   createSubject,
-  deleteUser
+  deleteUser,
+  getUsers,
+  getUserDetails,
+  updateUserStatus,
+  getAnalytics
 };

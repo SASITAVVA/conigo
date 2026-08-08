@@ -8,14 +8,8 @@ const router = express.Router();
 export { requireAuth, verifyToken };
 
 // Auth Routes
-router.post('/register', authController.register);
-router.post('/login', authController.login);
-router.post('/logout', requireAuth, authController.logout);
-router.post('/forgot-password', authController.forgotPassword);
-router.post('/reset-password', authController.resetPassword);
+router.post('/sync-session', authController.syncSession);
 router.get('/me', authController.getCurrentUser);
 router.put('/update-profile', authController.updateProfile);
-router.get('/verify-email', authController.verifyEmail);
-router.post('/resend-verification', authController.resendVerification);
 
 export default router;

@@ -16,16 +16,33 @@ document.addEventListener('DOMContentLoaded', () => {
     const appContainer = document.getElementById('app');
     
     // --- Auth Session Management ---
-    currentUser = JSON.parse(localStorage.getItem('currentUser'));
-    if (currentUser) {
-        authContainer.classList.add('hidden');
-        appContainer.classList.remove('hidden');
-        const emailDisplay = document.getElementById('sidebarEmailDisplay') || document.getElementById('userNameDisplay');
-        if (emailDisplay) emailDisplay.innerText = currentUser.email;
-        if (currentUser.role === 'admin') {
-            const adminNavItem = document.getElementById('nav-admin-item');
-            if (adminNavItem) adminNavItem.style.display = 'flex';
+    const updateUIForUser = (user) => {
+        if (user) {
+            currentUser = user;
+            authContainer.classList.add('hidden');
+            appContainer.classList.remove('hidden');
+            const emailDisplay = document.getElementById('sidebarEmailDisplay') || document.getElementById('userNameDisplay');
+            if (emailDisplay) emailDisplay.innerText = user.email;
+            if (user.role === 'admin') {
+                const adminNavItem = document.getElementById('nav-admin-item');
+                if (adminNavItem) adminNavItem.style.display = 'flex';
+            }
         }
+    };
+
+    currentUser = JSON.parse(localStorage.getItem('currentUser')) || JSON.parse(localStorage.getItem('cognipath_user'));
+    updateUIForUser(currentUser);
+
+    // Subscribe to stateManager to handle automatic OAuth logins
+    if (window.appState) {
+        window.appState.subscribe((state) => {
+            if (state.user && !authContainer.classList.contains('hidden')) {
+                updateUIForUser(state.user);
+                // Also update recent activities for the new user
+                recentActivities = JSON.parse(localStorage.getItem(getActivitiesKey())) || [];
+                renderDashboardActivities();
+            }
+        });
     }
 
     // --- Toast Notification System ---

@@ -28,6 +28,31 @@ class StateManager {
         this.eventSource = null;
 
         this.initSSE();
+        this.initSupabaseAuth();
+    }
+
+    async initSupabaseAuth() {
+        if (!window.supabase) return;
+        
+        // Initial session check (in case of OAuth redirect or page reload)
+        const { data: { session } } = await window.supabase.auth.getSession();
+        if (session) {
+            // We only sync if we haven't already locally authenticated with this token
+            if (this.state.token !== session.access_token) {
+                await this.syncSessionWithBackend(session).catch(e => console.warn(e));
+            }
+        }
+
+        // Listen for OAuth redirects or other auth events globally
+        window.supabase.auth.onAuthStateChange(async (event, session) => {
+            if (event === 'SIGNED_IN' && session) {
+                if (this.state.token !== session.access_token) {
+                    await this.syncSessionWithBackend(session).catch(e => console.warn(e));
+                }
+            } else if (event === 'SIGNED_OUT') {
+                this.logout();
+            }
+        });
     }
 
     // Connect to real-time Server-Sent Events stream for instant UI updates
@@ -196,9 +221,17 @@ class StateManager {
         }
     }
 
+    async authenticatedFetch(url, options = {}) {
+        const headers = { ...options.headers };
+        if (this.state.token) {
+            headers['Authorization'] = `Bearer ${this.state.token}`;
+        }
+        return fetch(url, { ...options, headers });
+    }
+
     async fetchDashboard() {
         try {
-            const res = await fetch(`${window.location.origin}/api/dashboard/stats?userId=${this.state.userId}`);
+            const res = await this.authenticatedFetch(`${window.location.origin}/api/dashboard/stats?userId=${this.state.userId}`);
             if (!res.ok) return;
             this.state.dashboard = await res.json();
         } catch (error) {
@@ -208,7 +241,7 @@ class StateManager {
 
     async fetchProgress() {
         try {
-            const res = await fetch(`${window.location.origin}/api/progress/summary?userId=${this.state.userId}`);
+            const res = await this.authenticatedFetch(`${window.location.origin}/api/progress/summary?userId=${this.state.userId}`);
             if (!res.ok) return;
             this.state.progress = await res.json();
         } catch (error) {
@@ -218,7 +251,7 @@ class StateManager {
 
     async fetchAnalytics() {
         try {
-            const res = await fetch(`${window.location.origin}/api/analytics/summary?userId=${this.state.userId}`);
+            const res = await this.authenticatedFetch(`${window.location.origin}/api/analytics/summary?userId=${this.state.userId}`);
             if (!res.ok) return;
             this.state.analytics = await res.json();
         } catch (error) {
@@ -228,7 +261,7 @@ class StateManager {
 
     async fetchGamification() {
         try {
-            const res = await fetch(`${window.location.origin}/api/gamification/summary?userId=${this.state.userId}`);
+            const res = await this.authenticatedFetch(`${window.location.origin}/api/gamification/summary?userId=${this.state.userId}`);
             if (!res.ok) return;
             this.state.gamification = await res.json();
         } catch (error) {
@@ -238,7 +271,7 @@ class StateManager {
 
     async fetchStudyMaterials() {
         try {
-            const res = await fetch(`${window.location.origin}/api/study-materials/all?userId=${this.state.userId}`);
+            const res = await this.authenticatedFetch(`${window.location.origin}/api/study-materials/all?userId=${this.state.userId}`);
             if (!res.ok) return;
             this.state.studyMaterials = await res.json();
         } catch (error) {
@@ -248,7 +281,7 @@ class StateManager {
 
     async fetchCourses() {
         try {
-            const res = await fetch(`${window.location.origin}/api/courses/all?userId=${this.state.userId}`);
+            const res = await this.authenticatedFetch(`${window.location.origin}/api/courses/all?userId=${this.state.userId}`);
             if (!res.ok) return;
             this.state.courses = await res.json();
         } catch (error) {
@@ -258,7 +291,7 @@ class StateManager {
 
     async fetchAdmin() {
         try {
-            const res = await fetch(`${window.location.origin}/api/admin/summary?userId=${this.state.userId}`);
+            const res = await this.authenticatedFetch(`${window.location.origin}/api/admin/summary?userId=${this.state.userId}`);
             if (!res.ok) return;
             this.state.admin = await res.json();
         } catch (error) {
@@ -267,59 +300,73 @@ class StateManager {
     }
 
     async login(email, password, rememberMe = true) {
-        let res;
         try {
-            res = await fetch(`${window.location.origin}/api/auth/login`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password, rememberMe })
+            const { data, error } = await window.supabase.auth.signInWithPassword({
+                email,
+                password
             });
-        } catch (err) {
-            throw new Error('Network error. Please check your connection and try again.');
-        }
-        
-        const contentType = res.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-            const text = await res.text();
-            console.error("Login API returned non-JSON response:", text);
-            throw new Error('A server error occurred. Please try again later.');
-        }
 
-        const data = await res.json();
-        
-        if (!res.ok) throw new Error(data.error || 'Login failed.');
-        
-        this.setUserSession(data.user, data.token);
-        await this.refreshAll();
-        return data.user;
+            if (error) throw new Error(error.message);
+            if (!data.session) throw new Error('Login failed. No session returned.');
+
+            return await this.syncSessionWithBackend(data.session);
+        } catch (err) {
+            console.error("Supabase login error:", err);
+            throw new Error(err.message || 'Login failed.');
+        }
     }
 
     async register(name, email, password, learningGoal) {
-        let res;
         try {
-            res = await fetch(`${window.location.origin}/api/auth/register`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, email, password, learningGoal })
+            const { data, error } = await window.supabase.auth.signUp({
+                email,
+                password,
+                options: {
+                    data: {
+                        full_name: name,
+                        name: name,
+                        learning_goal: learningGoal
+                    }
+                }
             });
+
+            if (error) throw new Error(error.message);
+
+            if (!data.session) {
+                throw new Error("Registration successful. Please check your email to confirm your account.");
+            }
+
+            return await this.syncSessionWithBackend(data.session);
         } catch (err) {
-            throw new Error('Network error. Please check your connection and try again.');
+            console.error("Supabase register error:", err);
+            throw new Error(err.message || 'Registration failed.');
         }
-        
-        const contentType = res.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-            const text = await res.text();
-            console.error("Register API returned non-JSON response:", text);
-            throw new Error('A server error occurred. Please try again later.');
+    }
+
+    async syncSessionWithBackend(session) {
+        try {
+            const res = await fetch(`${window.location.origin}/api/auth/sync-session`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.access_token}`
+                }
+            });
+
+            if (!res.ok) {
+                const errData = await res.json();
+                throw new Error(errData.error || 'Failed to sync session with backend.');
+            }
+
+            const data = await res.json();
+            
+            this.setUserSession(data.user, session.access_token);
+            await this.refreshAll();
+            
+            return data.user;
+        } catch (err) {
+            throw new Error('Session synchronization failed: ' + err.message);
         }
-
-        const data = await res.json();
-        
-        if (!res.ok) throw new Error(data.error || 'Registration failed.');
-
-        this.setUserSession(data.user, data.token);
-        await this.refreshAll();
-        return data.user;
     }
 
     setUserSession(user, token) {
@@ -332,6 +379,9 @@ class StateManager {
     }
 
     async logout() {
+        if (window.supabase) {
+            await window.supabase.auth.signOut();
+        }
         localStorage.removeItem('cognipath_user');
         localStorage.removeItem('cognipath_token');
         this.state.user = null;

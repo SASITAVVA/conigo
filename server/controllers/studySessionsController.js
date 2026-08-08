@@ -81,7 +81,7 @@ export const getSessionHistory = async (req, res) => {
 export const recordActivity = async (req, res) => {
   try {
     const { 
-      userId = '11111111-1111-1111-1111-111111111111', 
+      userId, 
       type, 
       title, 
       description, 
@@ -94,92 +94,45 @@ export const recordActivity = async (req, res) => {
       metadata 
     } = req.body;
 
-    const rawDb = db.getRawLocalDb();
-    const todayStr = new Date().toISOString().split('T')[0];
-    rawDb.recent_activity = rawDb.recent_activity || [];
+    // Use authenticated user ID if available
+    const realUserId = req.user?.id || userId || '11111111-1111-1111-1111-111111111111';
 
-    const nowMs = Date.now();
-    const recentDuplicate = rawDb.recent_activity.find(a => 
-      (a.user_id === userId || a.userId === userId) &&
-      a.type === type &&
-      a.title === title &&
-      (nowMs - new Date(a.created_at || a.timestamp || 0).getTime()) < 2000
-    );
-
-    if (recentDuplicate) {
-      return res.json({ success: true, duplicateIgnored: true, activity: recentDuplicate });
-    }
-
-    let resolvedSubjectName = subjectName || (subjectId ? (rawDb.subjects || []).find(s => s.id === subjectId)?.title : 'General Study') || 'General Study';
-
-    const newActivity = {
-      id: "act-" + crypto.randomUUID(),
-      user_id: userId,
-      userId: userId,
-      type: type || 'study',
-      title: title || 'Learning Activity',
-      description: description || 'Active study engagement',
-      subjectName: resolvedSubjectName,
-      topicName: topicName || null,
-      duration: duration || null,
-      status: status,
-      metadata: metadata || extraData || null,
-      created_at: new Date().toISOString(),
-      timestamp: new Date().toISOString()
+    // Build comprehensive metadata
+    const payloadMetadata = {
+        extraData, subjectId, subjectName, topicName, duration, status, ...metadata
     };
 
-    rawDb.recent_activity.unshift(newActivity);
-    if (rawDb.recent_activity.length > 500) rawDb.recent_activity = rawDb.recent_activity.slice(0, 500);
+    // Standardize action type for Admin Panel queries
+    let actionType = type ? type.toUpperCase() : 'STUDY';
+    if (actionType === 'UPLOAD') actionType = 'UPLOAD_PDF';
+    if (actionType === 'TOPIC') actionType = 'START_TOPIC';
 
-    let addedSeconds = duration ? Math.min(3600, duration) : 120;
-    if (!duration) {
-      if (type === 'quiz') addedSeconds = 300;
-      else if (type === 'upload' || type === 'note') addedSeconds = 240;
-      else if (type === 'flashcard' || type === 'topic' || type === 'course') addedSeconds = 180;
-    }
+    // 1. Insert directly into Supabase activity_logs
+    const { supabaseAdmin, activityLogService } = await import('../services/supabase.js');
+    await activityLogService(
+      realUserId, 
+      actionType, 
+      title || 'Learning Activity', 
+      description || 'Active study engagement', 
+      payloadMetadata
+    );
 
-    let targetSubject = (rawDb.subjects || []).find(s => s.id === subjectId || s.title.toLowerCase() === resolvedSubjectName.toLowerCase());
-    if (!targetSubject && rawDb.subjects && rawDb.subjects.length > 0) {
-      targetSubject = rawDb.subjects.find(s => title && title.toLowerCase().includes(s.title.toLowerCase().split(' ')[0])) || rawDb.subjects[0];
-    }
-    if (targetSubject) {
-      targetSubject.study_time_seconds = (targetSubject.study_time_seconds || 0) + addedSeconds;
-    }
+    // Try to trigger Gamification/Badges (Local logic still runs temporarily until full migration)
+    try {
+      await checkAndAwardBadges(realUserId);
+    } catch(e) {}
 
-    let session = (rawDb.study_sessions || []).find(s => s.user_id === userId && s.session_date === todayStr);
-    if (!session) {
-      session = {
-        id: "sess-" + crypto.randomUUID(),
-        user_id: userId,
-        subject_id: targetSubject ? targetSubject.id : 'sub-dsa',
-        session_date: todayStr,
-        duration_seconds: addedSeconds,
-        active_interactions: 1,
-        started_at: new Date().toISOString(),
-        ended_at: new Date().toISOString()
-      };
-      rawDb.study_sessions = rawDb.study_sessions || [];
-      rawDb.study_sessions.push(session);
-    } else {
-      session.duration_seconds = (session.duration_seconds || 0) + addedSeconds;
-      session.active_interactions = (session.active_interactions || 0) + 1;
-      session.ended_at = new Date().toISOString();
-    }
-
-    db.saveRawLocalDb(rawDb);
-    await checkAndAwardBadges(userId);
-
+    // Emit event for real-time frontend updates
     EventSystem.emit("ACTIVITY_RECORDED", {
-      userId,
-      activity: newActivity,
-      addedSeconds,
-      subjectName: resolvedSubjectName
+      userId: realUserId,
+      activity: { type, title, description },
+      subjectName: subjectName || 'General Study'
     });
 
-    res.json({ success: true, activity: newActivity, updatedSubject: targetSubject ? targetSubject.title : null, addedSeconds });
+    res.json({ success: true, activity: { type, title }, addedSeconds: duration || 120 });
   } catch (err) {
     console.error("Record Activity Error:", err);
-    res.status(500).json({ error: 'Failed to record activity and link study metrics.' });
+    res.status(500).json({ error: 'Failed to record activity in Supabase.' });
   }
 };
 

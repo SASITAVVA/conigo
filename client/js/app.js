@@ -17,16 +17,20 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // --- Auth Session Management ---
     const updateUIForUser = (user) => {
-        if (user) {
+        if (user && user.id !== "11111111-1111-1111-1111-111111111111") {
             currentUser = user;
             authContainer.classList.add('hidden');
             appContainer.classList.remove('hidden');
             const emailDisplay = document.getElementById('sidebarEmailDisplay') || document.getElementById('userNameDisplay');
-            if (emailDisplay) emailDisplay.innerText = user.email;
+            if (emailDisplay) emailDisplay.innerText = user.email || user.name;
             if (user.role === 'admin') {
                 const adminNavItem = document.getElementById('nav-admin-item');
                 if (adminNavItem) adminNavItem.style.display = 'flex';
             }
+        } else {
+            // Unauthenticated or stub user: force login screen
+            authContainer.classList.remove('hidden');
+            appContainer.classList.add('hidden');
         }
     };
 

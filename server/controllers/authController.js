@@ -9,6 +9,11 @@ export const syncSession = async (req, res) => {
 
     const token = authHeader.split(' ')[1];
 
+    // Check if the backend is missing the environment variables
+    if (supabaseAdmin.supabaseUrl.includes('missing-env')) {
+      return res.status(500).json({ error: 'CRITICAL ERROR: Vercel is missing SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables.' });
+    }
+
     // 1. Verify the Supabase JWT using the Supabase Admin client
     const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
     

@@ -106,7 +106,16 @@ export const processNoteTask = async (noteContent, taskType, customPrompt = "") 
                 systemPrompt = "You are an AI study assistant. Summarize the following note concisely in bullet points.";
                 break;
             case 'flashcards':
-                systemPrompt = "You are an AI study assistant. Extract key concepts from this note and generate flashcards. Return ONLY valid JSON in the exact format: { \"flashcards\": [ { \"question\": \"Question text here\", \"answer\": \"Answer text here\" } ] }. Do not use markdown blocks.";
+                systemPrompt = `You are an expert AI study tutor creating flashcards from student notes.
+Generate exactly 10 flashcards from the provided note content.
+CRITICAL RULES:
+- Every flashcard MUST have BOTH a "question" AND a detailed "answer" field.
+- The "answer" field must be a complete, specific explanation — never empty, null, or a placeholder.
+- Base questions and answers directly on the actual content provided in the notes.
+- Return ONLY valid JSON, no markdown, no code blocks.
+
+Required format:
+{ "flashcards": [ { "question": "Specific question about the note content", "answer": "Complete, detailed answer based on the note content" } ] }`;
                 break;
             case 'explain':
                 systemPrompt = "You are an AI study assistant. Explain the core concepts of this note in simple, easy-to-understand terms for a beginner.";

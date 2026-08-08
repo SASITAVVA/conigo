@@ -106,13 +106,23 @@ export const verifyAndSyncNote = async (req, res) => {
         // --- 4. Generate exactly 10 AI Flashcards ---
         let generatedCards = [];
         try {
-            const aiResponseStr = await geminiProcessNoteTask(noteContent, 'flashcards');
-            const aiResult = JSON.parse(aiResponseStr);
+            // processNoteTask with 'flashcards' already returns a PARSED object (not a string)
+            const aiResult = await geminiProcessNoteTask(noteContent, 'flashcards');
+            console.log('[Flashcards] AI raw result:', JSON.stringify(aiResult).slice(0, 200));
+
             if (aiResult && aiResult.flashcards && Array.isArray(aiResult.flashcards)) {
-                generatedCards = aiResult.flashcards.slice(0, 10);
+                // Only keep cards where BOTH question and answer are non-empty
+                const validCards = aiResult.flashcards.filter(
+                    card => card.question && card.question.trim().length > 3
+                          && card.answer && card.answer.trim().length > 3
+                );
+                console.log(`[Flashcards] AI returned ${aiResult.flashcards.length} cards, ${validCards.length} valid.`);
+                generatedCards = validCards.slice(0, 10);
+            } else {
+                console.warn('[Flashcards] AI response missing flashcards array:', JSON.stringify(aiResult));
             }
         } catch (aiErr) {
-            console.error('AI Flashcard Generation Failed:', aiErr);
+            console.error('[Flashcards] AI Flashcard Generation Failed:', aiErr.message || aiErr);
         }
 
         // If AI returned fewer than 10, pad with content extracted from the note itself
@@ -131,18 +141,27 @@ export const verifyAndSyncNote = async (req, res) => {
         }
 
         // --- 5. Save exactly 10 flashcards to Supabase ---
-        const flashcardRows = generatedCards.map(card => ({
-            user_id: userId,
-            topic: verifiedTopicTitle,
-            question: card.question || `Key concept from "${verifiedTopicTitle}"`,
-            answer: card.answer || 'Refer to your notes.',
-            difficulty_rating: 'normal',
-            times_reviewed: 0,
-            success_rate: 85,
-            next_review_date: new Date().toISOString().split('T')[0]
-        }));
+        // Validate every card has both question AND answer before saving
+        const flashcardRows = generatedCards
+            .filter(card => card.question && card.answer && card.answer.trim().length > 3)
+            .map(card => ({
+                user_id: userId,
+                topic: verifiedTopicTitle,
+                question: card.question.trim(),
+                answer: card.answer.trim(),
+                difficulty_rating: 'normal',
+                times_reviewed: 0,
+                success_rate: 85,
+                next_review_date: new Date().toISOString().split('T')[0]
+            }));
 
-        await supabaseAdmin.from('flashcards').insert(flashcardRows);
+        if (flashcardRows.length === 0) {
+            console.error('[Flashcards] No valid cards to save — both question and answer must be non-empty');
+        } else {
+            const { error: insertError } = await supabaseAdmin.from('flashcards').insert(flashcardRows);
+            if (insertError) console.error('[Flashcards] Supabase insert error:', insertError);
+            else console.log(`[Flashcards] Saved ${flashcardRows.length} cards to Supabase`);
+        }
 
         // --- 6. Log Activity ---
         await activityLogService({

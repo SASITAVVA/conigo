@@ -2648,20 +2648,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                     <div class="flex justify-between items-center text-muted" style="font-size: 0.75rem; margin-bottom: 4px;">
                         <span>Overall Mastery</span>
-                        <span style="color: var(--success); font-weight: 700;">89%</span>
+                        <span style="color: var(--success); font-weight: 700;">${allCards.length > 0 ? Math.round(allCards.reduce((s,c) => s + (c.success_rate || 0), 0) / allCards.length) : 0}%</span>
                     </div>
                     <div style="width: 100%; height: 5px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden;">
-                        <div style="width: 89%; height: 100%; background: var(--success); border-radius: 3px;"></div>
+                        <div style="width: ${allCards.length > 0 ? Math.round(allCards.reduce((s,c) => s + (c.success_rate || 0), 0) / allCards.length) : 0}%; height: 100%; background: var(--success); border-radius: 3px;"></div>
                     </div>
                 </div>
             `;
 
             activeCategories.forEach(cat => {
                 const isFromNote = noteTopics.includes(cat);
-                const catCards = allCards.filter(c => c.category === cat);
+                // Match both 'category' (old) and 'topic' (Supabase) fields
+                const catCards = allCards.filter(c => (c.category === cat) || (c.topic === cat));
                 const count = catCards.length;
-                const totalM = catCards.reduce((sum, c) => sum + (c.mastery_percentage || c.success_rate || 85), 0);
-                const mastery = Math.min(100, Math.round(totalM / Math.max(1, catCards.length)));
+                const totalM = catCards.reduce((sum, c) => sum + (c.mastery_percentage || c.success_rate || 0), 0);
+                const mastery = count > 0 ? Math.min(100, Math.round(totalM / count)) : 0;
                 const active = window.fcActiveCategory === cat;
                 const noteBadge = isFromNote ? `<span style="font-size: 0.65rem; background: rgba(245, 158, 11, 0.18); color: #fbbf24; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(245, 158, 11, 0.35); display: inline-block; font-weight: 600; margin-top: 3px;">📝 Saved Note</span>` : '';
 

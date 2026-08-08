@@ -115,12 +115,18 @@ export const verifyAndSyncNote = async (req, res) => {
             console.error('AI Flashcard Generation Failed:', aiErr);
         }
 
-        // If AI returned fewer than 10, pad with fallback cards
+        // If AI returned fewer than 10, pad with content extracted from the note itself
+        const sentences = (noteContent || '')
+            .split(/[.!?\n]+/)
+            .map(s => s.trim())
+            .filter(s => s.length > 20);
+
         while (generatedCards.length < 10) {
-            const idx = generatedCards.length + 1;
+            const idx = generatedCards.length;
+            const sentence = sentences[idx] || sentences[idx % Math.max(sentences.length, 1)] || '';
             generatedCards.push({
-                question: `Key Concept #${idx} from "${verifiedTopicTitle}": What is the core principle?`,
-                answer: `Refer to your saved notes on "${verifiedTopicTitle}" for the detailed answer.`
+                question: `From your notes on "${verifiedTopicTitle}": Explain the concept — "${sentence.slice(0, 80)}${sentence.length > 80 ? '...' : ''}"`,
+                answer: sentence || `Key principle #${idx + 1} from your "${verifiedTopicTitle}" notes. Review your saved note for the full detail.`
             });
         }
 

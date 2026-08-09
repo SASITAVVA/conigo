@@ -370,6 +370,11 @@ input[type="text"], input[type="email"], input[type="password"], input[type="fil
     font-size: 0.95rem;
 }
 
+/* Give the password field extra right padding so text doesn't overlap the eye icon */
+input[type="password"], input#authPassword {
+    padding-right: 2.8rem;
+}
+
 input:focus {
     border-color: var(--primary);
     background: var(--bg-surface);
@@ -518,13 +523,23 @@ input:focus {
 
 .pwd-toggle {
     position: absolute;
-    right: 12px;
+    right: 10px;
     top: 50%;
     transform: translateY(-50%);
     cursor: pointer;
     color: var(--text-secondary);
-    background: none; border: none; outline:none;
+    background: none;
+    border: none;
+    outline: none;
+    padding: 0;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color var(--transition-fast);
+    z-index: 2;
 }
+.pwd-toggle:hover { color: var(--primary); }
 
 /* --- Dashboard Layout --- */
 .sidebar {

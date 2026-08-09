@@ -1361,6 +1361,44 @@ document.addEventListener('DOMContentLoaded', () => {
                             });
                         }
                     }, 50);
+                } else if (taskType === 'translate' && customPrompt) {
+                    // Translate result: show translated content + a "Save as New Note" button
+                    const translatedText = typeof data.result === 'string' ? data.result : JSON.stringify(data.result);
+                    const originalTitle = noteTitleInput ? noteTitleInput.value : 'Note';
+                    modalContent.innerHTML = `
+                        <div style="background: rgba(16,185,129,0.05); border: 1px solid rgba(16,185,129,0.2); border-radius: 10px; padding: 0.75rem 1rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; color: var(--success);">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                            Translated to <strong style="margin-left:4px;">${customPrompt}</strong>. Your original note was <strong style="margin-left:4px;">not changed</strong>.
+                        </div>
+                        <div style="max-height: 45vh; overflow-y: auto; white-space: pre-wrap; line-height: 1.8; color: var(--text-primary); font-size: 0.95rem; padding: 0.5rem;">${translatedText}</div>
+                        <div style="margin-top: 1rem; display: flex; gap: 0.75rem;">
+                            <button id="btnSaveTranslationAsNote" class="btn-primary hover-lift" style="flex: 1; padding: 0.75rem; border-radius: 10px; font-weight: 600; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                                Save as New Note (${customPrompt})
+                            </button>
+                        </div>`;
+                    
+                    setTimeout(() => {
+                        const saveTransBtn = document.getElementById('btnSaveTranslationAsNote');
+                        if (saveTransBtn) {
+                            saveTransBtn.addEventListener('click', () => {
+                                const translatedNote = {
+                                    id: Date.now().toString(),
+                                    title: `${originalTitle} [${customPrompt}]`,
+                                    content: translatedText,
+                                    tag: `Translation`,
+                                    lastUpdated: new Date().toISOString()
+                                };
+                                myNotes.unshift(translatedNote);
+                                activeNoteId = translatedNote.id;
+                                localStorage.setItem('myNotes', JSON.stringify(myNotes));
+                                renderNotesList();
+                                loadActiveNote();
+                                document.getElementById('aiNoteResultModal').classList.add('hidden');
+                                showToast(`✅ Translation saved as a new note: "${translatedNote.title}"`);
+                            });
+                        }
+                    }, 50);
                 } else {
                     modalContent.innerHTML = typeof data.result === 'string' ? data.result : JSON.stringify(data.result);
                 }
@@ -1381,7 +1419,175 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btnAiQuiz')?.addEventListener('click', () => handleAITask('custom', 'Generate a quick multiple-choice quiz about this note.'));
     document.getElementById('btnAiExplain')?.addEventListener('click', () => handleAITask('explain'));
     document.getElementById('btnAiSimplify')?.addEventListener('click', () => handleAITask('simplify'));
-    document.getElementById('btnAiTranslate')?.addEventListener('click', () => handleAITask('translate'));
+
+    // --- Translate Note: Show Language Picker Modal ---
+    const languagePickerModal = document.getElementById('languagePickerModal');
+    const btnLangPickerClose = document.getElementById('btnLangPickerClose');
+    
+    document.getElementById('btnAiTranslate')?.addEventListener('click', () => {
+        if (!noteContentArea || !noteContentArea.value.trim()) {
+            showToast('Note is empty! Type something first.');
+            return;
+        }
+        if (languagePickerModal) languagePickerModal.classList.remove('hidden');
+    });
+
+    if (btnLangPickerClose) {
+        btnLangPickerClose.addEventListener('click', () => {
+            if (languagePickerModal) languagePickerModal.classList.add('hidden');
+        });
+    }
+
+    // Language button clicks — close picker then run translate with the selected language
+    document.querySelectorAll('.lang-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const selectedLang = btn.getAttribute('data-lang');
+            if (languagePickerModal) languagePickerModal.classList.add('hidden');
+            // Visual feedback: briefly highlight selected button
+            btn.style.background = 'rgba(79,70,229,0.2)';
+            btn.style.borderColor = 'var(--primary)';
+            setTimeout(() => {
+                btn.style.background = '';
+                btn.style.borderColor = '';
+            }, 300);
+            // Run translate task with chosen language as the customPrompt (language name)
+            handleAITask('translate', selectedLang);
+        });
+    });
+
+    // --- Upload PDF / Document to Notes ---
+    const btnUploadNotesPdf = document.getElementById('btnUploadNotesPdf');
+    const notesPdfFileInput = document.getElementById('notesPdfFileInput');
+    const notesPdfUploadModal = document.getElementById('notesPdfUploadModal');
+    const notesPdfUploadTitle = document.getElementById('notesPdfUploadTitle');
+    const notesPdfUploadMsg = document.getElementById('notesPdfUploadMsg');
+    const notesPdfUploadIcon = document.getElementById('notesPdfUploadIcon');
+    const notesPdfProgressFill = document.getElementById('notesPdfProgressFill');
+    const btnNotesPdfUploadClose = document.getElementById('btnNotesPdfUploadClose');
+
+    if (btnUploadNotesPdf && notesPdfFileInput) {
+        btnUploadNotesPdf.addEventListener('click', () => {
+            notesPdfFileInput.value = ''; // Reset so same file can be re-selected
+            notesPdfFileInput.click();
+        });
+
+        notesPdfFileInput.addEventListener('change', async () => {
+            const file = notesPdfFileInput.files[0];
+            if (!file) return;
+
+            // Show progress modal
+            if (notesPdfUploadModal) notesPdfUploadModal.classList.remove('hidden');
+            if (notesPdfUploadIcon) notesPdfUploadIcon.textContent = '📄';
+            if (notesPdfUploadTitle) notesPdfUploadTitle.textContent = `Reading "${file.name}"...`;
+            if (notesPdfUploadMsg) notesPdfUploadMsg.textContent = 'Extracting text from your document. Please wait.';
+            if (notesPdfProgressFill) notesPdfProgressFill.style.width = '10%';
+            if (btnNotesPdfUploadClose) btnNotesPdfUploadClose.classList.add('hidden');
+
+            const setProgress = (pct, msg) => {
+                if (notesPdfProgressFill) notesPdfProgressFill.style.width = pct + '%';
+                if (notesPdfUploadMsg) notesPdfUploadMsg.textContent = msg;
+            };
+
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const fname = file.name.toLowerCase();
+                let extractedText = '';
+
+                setProgress(25, 'Parsing document structure...');
+
+                if (fname.endsWith('.pdf')) {
+                    // Use pdfjs-dist which is already loaded on the page
+                    if (typeof pdfjsLib === 'undefined') throw new Error('PDF.js library is not loaded.');
+                    const typedArray = new Uint8Array(arrayBuffer);
+                    const pdf = await pdfjsLib.getDocument(typedArray).promise;
+                    const totalPages = pdf.numPages;
+
+                    for (let i = 1; i <= totalPages; i++) {
+                        const page = await pdf.getPage(i);
+                        const textContent = await page.getTextContent();
+                        let pageText = '';
+                        let lastY = null;
+                        for (const item of textContent.items) {
+                            if (lastY !== null && Math.abs(item.transform[5] - lastY) > 6) {
+                                pageText += '\n' + item.str;
+                            } else {
+                                pageText += ' ' + item.str;
+                            }
+                            lastY = item.transform[5];
+                        }
+                        extractedText += `\n--- Page ${i} ---\n${pageText.trim()}\n`;
+                        setProgress(25 + Math.round((i / totalPages) * 55), `Extracting page ${i} of ${totalPages}...`);
+                    }
+
+                } else if (fname.endsWith('.docx')) {
+                    setProgress(50, 'Parsing DOCX content...');
+                    if (typeof mammoth !== 'undefined') {
+                        const result = await mammoth.extractRawText({ arrayBuffer });
+                        extractedText = result.value || '';
+                    } else {
+                        extractedText = new TextDecoder('utf-8', { fatal: false }).decode(arrayBuffer);
+                    }
+                    setProgress(80, 'Content extracted!');
+
+                } else if (fname.endsWith('.txt')) {
+                    extractedText = new TextDecoder('utf-8', { fatal: false }).decode(arrayBuffer);
+                    setProgress(80, 'Text file read successfully!');
+                } else {
+                    throw new Error('Unsupported file type. Please upload a PDF, DOCX, or TXT file.');
+                }
+
+                if (!extractedText.trim()) {
+                    throw new Error('No readable text found in this document. It may be a scanned image PDF.');
+                }
+
+                setProgress(90, 'Creating note from extracted content...');
+
+                // Create a new note with the extracted content
+                const newNoteTitle = file.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                const newNote = {
+                    id: Date.now().toString(),
+                    title: newNoteTitle,
+                    content: extractedText.trim(),
+                    tag: 'PDF Import',
+                    lastUpdated: new Date().toISOString()
+                };
+
+                // Add to front of list and make it the active note
+                myNotes.unshift(newNote);
+                activeNoteId = newNote.id;
+                localStorage.setItem('myNotes', JSON.stringify(myNotes));
+                renderNotesList();
+                loadActiveNote();
+
+                setProgress(100, `Successfully created note "${newNoteTitle}" with ${extractedText.trim().split(/\s+/).length.toLocaleString()} words!`);
+                if (notesPdfUploadIcon) notesPdfUploadIcon.textContent = '✅';
+                if (notesPdfUploadTitle) notesPdfUploadTitle.textContent = 'Note Created!';
+                if (btnNotesPdfUploadClose) btnNotesPdfUploadClose.classList.remove('hidden');
+
+                showToast(`✅ PDF imported as "${newNoteTitle}" — ready to use!`);
+                logActivity && logActivity('upload', `PDF imported: ${file.name}`, 'Uploaded and extracted as study note');
+
+            } catch (err) {
+                console.error('Notes PDF Upload Error:', err);
+                if (notesPdfUploadIcon) notesPdfUploadIcon.textContent = '❌';
+                if (notesPdfUploadTitle) notesPdfUploadTitle.textContent = 'Upload Failed';
+                if (notesPdfUploadMsg) notesPdfUploadMsg.textContent = err.message || 'An unknown error occurred. Please try again.';
+                if (notesPdfProgressFill) notesPdfProgressFill.style.background = 'var(--error)';
+                if (btnNotesPdfUploadClose) btnNotesPdfUploadClose.classList.remove('hidden');
+            }
+        });
+    }
+
+    if (btnNotesPdfUploadClose) {
+        btnNotesPdfUploadClose.addEventListener('click', () => {
+            if (notesPdfUploadModal) notesPdfUploadModal.classList.add('hidden');
+            // Reset progress bar for next use
+            if (notesPdfProgressFill) {
+                notesPdfProgressFill.style.width = '0%';
+                notesPdfProgressFill.style.background = 'linear-gradient(90deg, var(--primary), var(--secondary))';
+            }
+        });
+    }
 
     // Bind AI Chat Input
     const aiChatInput = document.getElementById('aiChatInput');

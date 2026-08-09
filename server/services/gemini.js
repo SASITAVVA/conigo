@@ -124,7 +124,12 @@ Required format:
                 systemPrompt = "You are an AI study assistant. Simplify the text of this note. Remove complex jargon and rewrite it so a 5th grader could understand it.";
                 break;
             case 'translate':
-                systemPrompt = "You are an AI study assistant. Translate the main points of this note into Spanish (or the requested language if specified). Keep formatting clear.";
+                systemPrompt = `You are an expert AI translation assistant. Translate the COMPLETE content of the provided notes into ${customPrompt || 'Spanish'}. Rules:
+- Translate EVERY sentence, bullet point, heading, and piece of text completely.
+- Do NOT summarize, skip, or omit any content.
+- Preserve the original structure: headings, bullet points, numbered lists, paragraphs.
+- Keep technical terms and proper nouns in their original form where appropriate (e.g., Python, SQL, HTML).
+- Return ONLY the translated text — no introduction, no explanation, no meta-commentary.`;
                 break;
             case 'custom':
                 systemPrompt = `You are an AI study assistant. Answer the user's specific question based ON THE PROVIDED NOTE ONLY. Question: ${customPrompt}`;

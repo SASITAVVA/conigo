@@ -276,12 +276,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     togglePwdBtn.addEventListener('click', () => {
+        const eyeShow = document.getElementById('eyeIconShow');
+        const eyeHide = document.getElementById('eyeIconHide');
         if (pwdInput.type === 'password') {
             pwdInput.type = 'text';
-            togglePwdBtn.innerText = 'Hide';
+            if (eyeShow) eyeShow.style.display = 'none';
+            if (eyeHide) eyeHide.style.display = 'block';
         } else {
             pwdInput.type = 'password';
-            togglePwdBtn.innerText = 'Show';
+            if (eyeShow) eyeShow.style.display = 'block';
+            if (eyeHide) eyeHide.style.display = 'none';
         }
     });
 

@@ -75,6 +75,16 @@ export const verifyAndSyncNote = async (req, res) => {
                 .select('id')
                 .single();
             topicId = newTopic?.id;
+            
+            // Also generate related upcoming topics based on this note
+            try {
+                await supabaseAdmin.from('topics').insert([
+                    { title: `Advanced ${verifiedTopicTitle}`, subject_id: subjectId, difficulty: 'Hard' },
+                    { title: `${verifiedTopicTitle} Practice`, subject_id: subjectId, difficulty: 'Medium' }
+                ]);
+            } catch (ignoreErr) {
+                // Ignore if it fails
+            }
         } else {
             topicId = existingTopic.id;
         }

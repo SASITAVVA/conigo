@@ -2205,7 +2205,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                     <div style="font-size: 0.75rem; color: var(--text-secondary);">${item.subject || 'Core Curriculum'}</div>
                                 </div>
                             </div>
-                            <button class="hover-lift" onclick="if(typeof window.openTopicStudyGuide === 'function') window.openTopicStudyGuide('${item.title.replace(/'/g, "\\'")}', '${(item.subject || 'Core Curriculum').replace(/'/g, "\\'")}', '');" style="background: rgba(99,102,241,0.15); border: 1px solid rgba(99,102,241,0.3); color: #c4b5fd; padding: 4px 8px; border-radius: 4px; font-size: 0.7rem; cursor: pointer; font-weight: 600; white-space: nowrap; flex-shrink: 0; margin-left: 0.5rem;">Study ⚡</button>
+                            <button class="hover-lift" title="Study this topic" onclick="if(typeof window.openTopicStudyGuide === 'function') window.openTopicStudyGuide('${item.title.replace(/'/g, "\\'")}', '${(item.subject || 'Core Curriculum').replace(/'/g, "\\'")}', '');" style="background: rgba(99,102,241,0.15); border: 1px solid rgba(99,102,241,0.3); color: #c4b5fd; padding: 4px 8px; border-radius: 4px; font-size: 1rem; cursor: pointer; flex-shrink: 0; margin-left: 0.5rem; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px;">📖</button>
                         </div>
                     `).join('');
                 }

@@ -22,14 +22,16 @@ export const getDashboardStats = async (req, res) => {
             { data: progressData },
             { data: sessionsData },
             { data: activitiesData },
-            { data: resourcesData }
+            { data: resourcesData },
+            { count: documentsCount }
         ] = await Promise.all([
             supabaseAdmin.from('subjects').select('*'),
             supabaseAdmin.from('topics').select('*'),
             supabaseAdmin.from('learning_progress').select('*').eq('user_id', userId),
             supabaseAdmin.from('study_sessions').select('*').eq('user_id', userId),
             supabaseAdmin.from('activity_logs').select('*').eq('user_id', userId),
-            supabaseAdmin.from('resources').select('*').eq('user_id', userId)
+            supabaseAdmin.from('resources').select('*').eq('user_id', userId),
+            supabaseAdmin.from('documents').select('id', { count: 'exact' }).eq('user_id', userId)
         ]);
 
         const subjects = subjectsData || [];
@@ -38,8 +40,7 @@ export const getDashboardStats = async (req, res) => {
         const userSessions = sessionsData || [];
         const userActivities = activitiesData || [];
         const userResources = resourcesData || [];
-
-        const userPdfs = userResources.length;
+        const userPdfs = documentsCount || 0;
         const userQuestions = userActivities.filter(a => a.action_type === 'chat' || a.action_type === 'ask_question').length;
 
         const isEmpty = (userProgress.length === 0 && userSessions.length === 0 && userActivities.length === 0 && userPdfs === 0);

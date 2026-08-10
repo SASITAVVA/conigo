@@ -31,6 +31,7 @@ import searchRoutes from './routes/search.js';
 import studyMaterialRoutes from './routes/studyMaterials.js';
 import courseRoutes from './routes/courses.js';
 import analyticsRoutes from './routes/analytics.js';
+import adminRoutes from './routes/admin.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -83,6 +84,7 @@ app.use('/api/search', searchRoutes);
 app.use('/api/study-materials', studyMaterialRoutes);
 app.use('/api/courses', courseRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Enterprise Global Error and 404 Handlers
 app.use(notFoundHandler);

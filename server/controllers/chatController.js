@@ -178,7 +178,7 @@ export const handleChatMessage = async (req, res) => {
               contextText = availableDocsText + "\n\n=== RETRIEVED KNOWLEDGE FROM USER'S UPLOADED PDF DOCUMENTS ===\n" + 
                   matchedChunks.map((c, idx) => `[Excerpt ${idx + 1}] Document: "${c.document_title || 'Uploaded PDF'}" | Page: ${c.page_number || 1} | Section: "${c.section_heading || 'General Content'}"\nContent: ${c.content}`).join("\n\n---------------------------------\n\n");
           } else {
-              contextText = availableDocsText + "\n\n[NO RELEVANT PDF DOCUMENTS FOUND FOR THIS QUERY.]";
+              contextText = availableDocsText + "\n\n[NO RELEVANT PDF EXCERPTS FOUND. If the user asked a general knowledge question, answer it normally using your own knowledge without asking for a PDF.]";
           }
         } catch (embErr) {
           console.error("[ChatController] Document retrieval exception:", embErr);
@@ -204,10 +204,11 @@ export const handleChatMessage = async (req, res) => {
 === MANDATORY BEHAVIOR & ARCHITECTURE RULES ===
 1. CONTEXT AWARENESS: You are part of an ongoing conversation. Remember the user's previous questions and your previous answers. Do not repeat yourself unnecessarily. Ensure logical continuity.
 2. NO AUTOMATIC QUESTION GENERATION: Your SOLE purpose is to answer the question asked. DO NOT generate unsolicited quiz questions at the end of your answer.
-3. HYBRID RAG (RETRIEVAL-AUGMENTED GENERATION): You are a hybrid tutor. 
-    - If the user asks a question ABOUT their uploaded documents, notes, or courses (or mentions "pdf", "document", etc.), you MUST base your answer primarily on the retrieved excerpts below. 
-    - If the user asks about their document but the retrieved excerpts do not contain the answer, you MUST explicitly state that the uploaded documents do not cover the topic.
-    - If the user asks a GENERAL conversation question (e.g. "hi", "how are you", "explain algebra"), completely ignore the retrieved excerpts and answer naturally using your general knowledge. Do NOT mention the documents or apologize for them unless the user specifically asked about them.
+3. HYBRID RAG & INTELLIGENT QUESTION DETECTION: You are a hybrid tutor. 
+    - GENERAL QUESTIONS: If the user asks a general knowledge question (e.g. "What is Python?", "Explain DBMS", "hi"), answer normally and fully using your general AI knowledge. DO NOT ask the user to upload a PDF. DO NOT apologize for not having a PDF. Behave like a normal AI assistant.
+    - PDF-BASED QUESTIONS (PDF UPLOADED): If the user asks about an uploaded document (or the current PDF context) AND relevant excerpts are retrieved below, answer using the PDF excerpts.
+    - PDF-BASED QUESTIONS (NO PDF UPLOADED): ONLY if the user EXPLICITLY asks about "this PDF", "my notes", "the document", "Chapter 2", etc., AND no excerpts are retrieved, then politely ask them to upload the relevant PDF so you can assist them.
+    - MIXED CONTEXT: If a PDF is already uploaded but the user asks a general question, answer it normally while incorporating the PDF context only if it is highly relevant. Do not ask them to upload a PDF if one is already available.
 4. MANDATORY SOURCE REFERENCE FOOTER: ONLY when your answer utilizes information from the retrieved PDF documents, you MUST append a dedicated "**Source Reference**" block at the very end of your response formatted exactly as follows:
 ---
 **Source Reference:**

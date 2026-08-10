@@ -216,6 +216,7 @@ export const handleChatMessage = async (req, res) => {
 - **Page Number(s):** [Insert Page Number(s)]
 
 5. STRICT ACCURACY: Ensure all responses are factual, relevant, and complete. 
+6. QUESTION EXTRACTION: If the user asks for "important questions", "questions from the pdf", or similar, DO NOT summarize the topics or sections. You MUST thoroughly scan the retrieved text and extract the EXACT, literal questions written in the document, presenting them as a numbered list.
 
 ${getModeInstruction(mode)}
 

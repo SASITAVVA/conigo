@@ -2,9 +2,10 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 dotenv.config();
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+export const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+export const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 // Use service_role key to bypass RLS for admin operations on the backend
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY; 
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || supabaseAnonKey;
 
 if (!supabaseUrl || !supabaseServiceKey) {
   console.warn("⚠️ SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is missing. Backend Supabase operations will fail.");

@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { supabaseAdmin, activityLogService } from '../services/supabase.js';
+import { supabaseAdmin, activityLogService, supabaseUrl, supabaseAnonKey } from '../services/supabase.js';
 
 export const syncSession = async (req, res) => {
   try {
@@ -28,8 +28,8 @@ export const syncSession = async (req, res) => {
 
     // Create a user-scoped client to perform profile operations safely bypassing RLS if service_role is missing
     const userSupabase = createClient(
-      process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL,
-      process.env.SUPABASE_ANON_KEY,
+      supabaseUrl || 'https://missing-env.supabase.co',
+      supabaseAnonKey || 'missing_key',
       { global: { headers: { Authorization: `Bearer ${token}` } } }
     );
 

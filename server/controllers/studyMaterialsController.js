@@ -209,6 +209,40 @@ export const setGoal = async (req, res) => {
   res.json({ success: true, goal: newGoal });
 };
 
+export const deleteFlashcard = async (req, res) => {
+  try {
+    const userId = await getUserId(req);
+    const flashcardId = req.params.id;
+
+    const { data: flashcard, error: fetchError } = await supabaseAdmin
+      .from('flashcards')
+      .select('id')
+      .eq('id', flashcardId)
+      .eq('user_id', userId)
+      .single();
+
+    if (fetchError || !flashcard) {
+      return res.status(404).json({ error: 'Flashcard not found or unauthorized' });
+    }
+
+    const { error: deleteError } = await supabaseAdmin
+      .from('flashcards')
+      .delete()
+      .eq('id', flashcardId);
+
+    if (deleteError) {
+      return res.status(500).json({ error: 'Failed to delete flashcard' });
+    }
+
+    await activityLogService({ userId, actionType: 'FLASHCARD_DELETED', entityType: 'flashcard', entityId: flashcardId });
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Delete Flashcard Error:", err);
+    res.status(500).json({ error: 'Server error while deleting flashcard.' });
+  }
+};
+
 export default {
   getStudyMaterials,
   reviewFlashcard,
@@ -216,5 +250,6 @@ export default {
   generateAiAssistInsight,
   addBookmark,
   deleteBookmark,
+  deleteFlashcard,
   setGoal
 };

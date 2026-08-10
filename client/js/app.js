@@ -3158,6 +3158,48 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('fc-btn-report')?.addEventListener('click', () => {
         if (typeof showToast === 'function') showToast('⚠️ Reported card inaccuracy to platform governance review.');
     });
+    
+    document.getElementById('fc-btn-delete')?.addEventListener('click', async () => {
+        if (!window.flashcardDeck || window.flashcardDeck.length === 0) return;
+        const card = window.flashcardDeck[window.currentCardIdx];
+        if (!card || !card.id) return;
+        
+        if (!confirm('Are you sure you want to delete this flashcard? This action cannot be undone.')) return;
+        
+        try {
+            const token = window.appState?.state?.token || localStorage.getItem('cognipath_token');
+            if (!token) throw new Error('Not authenticated');
+            
+            const res = await fetch(`/api/study-materials/flashcards/${card.id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (!res.ok) throw new Error('Failed to delete flashcard from server');
+            
+            if (typeof showToast === 'function') showToast('🗑️ Flashcard deleted successfully');
+            
+            // Remove from local state
+            window.flashcardDeck.splice(window.currentCardIdx, 1);
+            if (window.currentCardIdx >= window.flashcardDeck.length) {
+                window.currentCardIdx = Math.max(0, window.flashcardDeck.length - 1);
+            }
+            
+            // Re-render UI
+            if (typeof window.renderCurrentCard === 'function') {
+                window.renderCurrentCard();
+            }
+            
+            // Trigger background refresh of progress stats
+            if (window.appState && typeof window.appState.refreshAll === 'function') {
+                window.appState.refreshAll();
+            }
+            
+        } catch (err) {
+            console.error("Delete flashcard error:", err);
+            if (typeof showToast === 'function') showToast('❌ Error deleting flashcard: ' + err.message);
+        }
+    });
     document.getElementById('fc-btn-ai-explain')?.addEventListener('click', () => {
         document.querySelector('.btn-ai-assist[data-action="explain_simply"]')?.click();
     });

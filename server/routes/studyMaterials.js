@@ -10,6 +10,7 @@ router.post('/flashcards/bulk-save', studyMaterialsController.bulkSaveFlashcards
 router.post('/flashcards/ai-assist', studyMaterialsController.generateAiAssistInsight);
 router.post('/bookmarks', studyMaterialsController.addBookmark);
 router.delete('/bookmarks/:id', studyMaterialsController.deleteBookmark);
+router.delete('/flashcards/:id', studyMaterialsController.deleteFlashcard);
 router.post('/goals', studyMaterialsController.setGoal);
 
 export default router;

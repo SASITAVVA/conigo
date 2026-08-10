@@ -196,11 +196,41 @@ export const verifyAndSyncNote = async (req, res) => {
 export const processTask = async (req, res) => {
     try {
         const { noteContent, taskType, customPrompt } = req.body;
+        const userId = await getUserId(req);
 
         if (!noteContent) return res.status(400).json({ success: false, error: 'Note content is required' });
         if (!taskType) return res.status(400).json({ success: false, error: 'Task type is required' });
 
         const resultText = await geminiProcessNoteTask(noteContent, taskType, customPrompt);
+
+        // Map task type to a meaningful action type for admin logs
+        const taskActionMap = {
+            'summarize':  'NOTE_SUMMARIZED',
+            'flashcards': 'FLASHCARD_SET_CREATED',
+            'quiz':       'QUIZ_GENERATED',
+            'translate':  'NOTE_TRANSLATED',
+            'explain':    'NOTE_EXPLAINED',
+            'simplify':   'NOTE_SIMPLIFIED',
+            'custom':     'AI_TASK_TRIGGERED',
+        };
+        const actionType = taskActionMap[taskType] || 'AI_TASK_TRIGGERED';
+
+        // Log to Supabase if we have a real userId
+        if (userId && userId !== '11111111-1111-1111-1111-111111111111') {
+            await activityLogService({
+                userId,
+                actionType,
+                entityType: 'note',
+                entityId: null,
+                metadata: {
+                    title: `AI ${taskType.charAt(0).toUpperCase() + taskType.slice(1)} Task`,
+                    description: customPrompt ? `Custom: ${customPrompt.slice(0, 80)}` : `Generated ${taskType} from note`,
+                    taskType,
+                    language: customPrompt || null
+                }
+            });
+        }
+
         res.json({ success: true, result: resultText });
     } catch (error) {
         console.error('Notes Task Route Error:', error);
@@ -213,5 +243,6 @@ export const processTask = async (req, res) => {
         res.status(500).json({ success: false, error: errorMessage });
     }
 };
+
 
 export default { verifyAndSyncNote, processTask };

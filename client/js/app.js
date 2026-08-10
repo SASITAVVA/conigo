@@ -153,9 +153,20 @@ document.addEventListener('DOMContentLoaded', () => {
         // Persist real user activity directly to backend database to update Study Time by Subject and Learning Streaks
         try {
             const currentUserId = currentUser ? (currentUser.id || currentUser.user_id) : "11111111-1111-1111-1111-111111111111";
+            // Get the Supabase session token for backend verification
+            const supabaseToken = localStorage.getItem('sb-tcyslennzzexshzpbgzd-auth-token');
+            let authToken = '';
+            try {
+                const parsed = supabaseToken ? JSON.parse(supabaseToken) : null;
+                authToken = parsed?.access_token || '';
+            } catch(_) {}
+
+            const headers = { 'Content-Type': 'application/json' };
+            if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+
             fetch(`${window.location.origin}/api/study-sessions/record-activity`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify({ 
                     userId: currentUserId, 
                     type, 

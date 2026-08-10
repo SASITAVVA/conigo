@@ -1,4 +1,4 @@
-import { supabaseAdmin } from '../services/supabase.js';
+import { supabaseAdmin, activityLogService } from '../services/supabase.js';
 import { EventSystem } from '../services/events.js';
 import { checkAndAwardBadges } from '../controllers/gamificationController.js';
 
@@ -175,9 +175,13 @@ export const updateProgress = async (req, res) => {
         }
 
         // Add to activity logs
-        await supabaseAdmin.from('activity_logs').insert({
-            user_id: userId,
-            action_type: `topic_${status}`,
+        // Add to activity logs using the standard service so admin panel formats it properly
+        await activityLogService({
+            userId,
+            actionType: status === 'completed' ? 'TOPIC_COMPLETED' : 'TOPIC_IN_PROGRESS',
+            entityType: 'topic',
+            entityId: topicId,
+            metadata: { topic: topicTitle || 'Unknown Topic', subjectId, masteryScore }
         });
 
         await EventSystem.emit('TOPIC_COMPLETED', {

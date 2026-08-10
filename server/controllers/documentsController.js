@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { supabaseAdmin } from '../services/supabase.js';
+import { supabaseAdmin, activityLogService } from '../services/supabase.js';
 import { db } from '../services/db.js';
 
 
@@ -178,6 +178,17 @@ export const processDocument = async (req, res) => {
                         created_at: chk.created_at
                     });
                     if (chunkErr) console.error("Supabase Chunk Insert Error:", chunkErr);
+                }
+                
+                // Log the PDF upload activity since processing was successful
+                if (generatedChunks.length > 0) {
+                    await activityLogService({
+                        userId,
+                        actionType: 'PDF_UPLOADED',
+                        entityType: 'document',
+                        entityId: documentId,
+                        metadata: { title, chunkCount: generatedChunks.length }
+                    });
                 }
             } catch(sErr) {
                 console.error("Supabase Try/Catch Error:", sErr);

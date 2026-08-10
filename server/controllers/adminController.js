@@ -310,7 +310,7 @@ export const getActivityLogs = async (req, res) => {
         const limitNum = Math.min(200, Math.max(1, parseInt(limit)));
         const offset = (pageNum - 1) * limitNum;
 
-        let query = supabaseAdmin.from('activity_logs').select('*, profiles(full_name, email)', { count: 'exact' });
+        let query = supabaseAdmin.from('activity_logs').select('*', { count: 'exact' });
         if (user_id) query = query.eq('user_id', user_id);
         if (action_type) query = query.ilike('action_type', `%${action_type}%`);
         if (from) query = query.gte('created_at', from);
@@ -320,9 +320,24 @@ export const getActivityLogs = async (req, res) => {
         const { data: logs, error, count } = await query;
         if (error) throw error;
 
+        let enrichedLogs = logs || [];
+        if (enrichedLogs.length > 0) {
+            const userIds = [...new Set(enrichedLogs.map(l => l.user_id).filter(Boolean))];
+            if (userIds.length > 0) {
+                const { data: profilesData } = await supabaseAdmin.from('profiles').select('id, full_name, email').in('id', userIds);
+                const profilesMap = {};
+                (profilesData || []).forEach(p => profilesMap[p.id] = p);
+                
+                enrichedLogs = enrichedLogs.map(log => ({
+                    ...log,
+                    profiles: profilesMap[log.user_id] || null
+                }));
+            }
+        }
+
         res.json({
             success: true,
-            logs: logs || [],
+            logs: enrichedLogs,
             total: count || 0,
             page: pageNum,
             pages: Math.ceil((count || 0) / limitNum)

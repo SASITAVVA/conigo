@@ -1,5 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
-import { supabaseAdmin, activityLogService, supabaseUrl, supabaseAnonKey } from '../services/supabase.js';
+import { supabaseAdmin, activityLogService } from '../services/supabase.js';
 
 export const syncSession = async (req, res) => {
   try {
@@ -26,15 +25,8 @@ export const syncSession = async (req, res) => {
     const email = user.email;
     const fullName = user.user_metadata?.full_name || user.user_metadata?.name || 'Student';
 
-    // Create a user-scoped client to perform profile operations safely bypassing RLS if service_role is missing
-    const userSupabase = createClient(
-      supabaseUrl || 'https://missing-env.supabase.co',
-      supabaseAnonKey || 'missing_key',
-      { global: { headers: { Authorization: `Bearer ${token}` } } }
-    );
-
     // 2. Safely create or find the profile in public.profiles
-    let { data: profile, error: profileError } = await userSupabase
+    let { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
       .select('*')
       .eq('id', userId)
@@ -42,7 +34,7 @@ export const syncSession = async (req, res) => {
 
     if (profileError && profileError.code === 'PGRST116') {
       // Profile does not exist yet (e.g. trigger failed or didn't run)
-      const { data: newProfile, error: insertError } = await userSupabase
+      const { data: newProfile, error: insertError } = await supabaseAdmin
         .from('profiles')
         .insert([{
           id: userId,
@@ -66,7 +58,7 @@ export const syncSession = async (req, res) => {
       return res.status(500).json({ error: `Failed to retrieve user profile. Database error: ${profileError.message}` });
     } else {
       // Profile exists, update last_login_at
-      const { data: updatedProfile, error: updateError } = await userSupabase
+      const { data: updatedProfile, error: updateError } = await supabaseAdmin
         .from('profiles')
         .update({
           last_login_at: new Date().toISOString(),

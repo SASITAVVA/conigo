@@ -2389,9 +2389,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Populate badges
                 const badgesGrid = document.getElementById('badges-showcase-grid');
-                if (badgesGrid && state.gamification.allBadges) {
-                    badgesGrid.innerHTML = state.gamification.allBadges.map(b => {
-                        const unlocked = (state.gamification.badges || []).some(ub => ub.id === b.id || ub.badge_id === b.id);
+                if (badgesGrid && state.gamification.badges) {
+                    badgesGrid.innerHTML = state.gamification.badges.map(b => {
+                        const unlocked = b.unlocked;
                         return `
                             <div class="surface-card badge-card ${unlocked ? 'unlocked' : 'locked'}" style="padding: 1rem; text-align: center; border-radius: 12px; border: 1px solid ${unlocked ? 'var(--primary)' : 'var(--border-light)'};">
                                 <div style="font-size: 2rem; margin-bottom: 0.5rem;">${b.icon}</div>
